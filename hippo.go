@@ -18,23 +18,24 @@ type Client struct {
 
 type Rule struct {
 	Dir                string   `json:"direction,omitempty"`
-	Ports              []string `json:"ports,omitempty"`
-	Protocols          []uint   `json:"protocols,omitempty"`
-	ASNs               []string `json:"asns,omitempty"`
-	LastHopASNNames    []string `json:"last_hop_asn_names,omitempty"`
-	NextHopASNs        []string `json:"next_hop_asns,omitempty"`
-	NextHopASNNames    []string `json:"next_hop_ans_names,omitempty"`
-	BGPASPaths         []string `json:"bgp_as_paths,omitempty"`
-	BGPCommunities     []string `json:"bgp_communities,omitempty"`
+	Ports              []string `json:"port,omitempty"`
+	Protocols          []uint   `json:"protocol,omitempty"`
+	ASNs               []string `json:"asn,omitempty"`
+	VLanRanges         []string `json:"vlans,omitempty"`
+	LastHopASNNames    []string `json:"lasthop_as_name,omitempty"`
+	NextHopASNs        []string `json:"nexthop_asn,omitempty"`
+	NextHopASNNames    []string `json:"nexthop_as_name,omitempty"`
+	BGPASPaths         []string `json:"bgp_aspath,omitempty"`
+	BGPCommunities     []string `json:"bgp_community,omitempty"`
 	TCPFlags           uint16   `json:"tcp_flags,omitempty"`
-	IPAddresses        []string `json:"ip_addresses,omitempty"`
-	MACAddresses       []string `json:"mac_addresses,omitempty"`
-	CountryCodes       []string `json:"country_codes,omitempty"`
-	SiteNames          []string `json:"site_names,omitempty"`
-	DeviceTypes        []string `json:"device_types,omitempty"`
-	InterfaceNames     []string `json:"interface_names,omitempty"`
-	DeviceNames        []string `json:"device_names,omitempty"`
-	NextHopIPAddresses []string `json:"next_hop_ip_addresses,omitempty"`
+	IPAddresses        []string `json:"addr,omitempty"`
+	MACAddresses       []string `json:"mac,omitempty"`
+	CountryCodes       []string `json:"country,omitempty"`
+	SiteNames          []string `json:"site,omitempty"`
+	DeviceTypes        []string `json:"device_type,omitempty"`
+	InterfaceNames     []string `json:"interface_name,omitempty"`
+	DeviceNames        []string `json:"device_name,omitempty"`
+	NextHopIPAddresses []string `json:"nexthop,omitempty"`
 }
 
 type Upsert struct {
