@@ -54,6 +54,18 @@ type Req struct {
 	Deletes  []Delete `json:"deletes,omitempty"`
 }
 
+type CustomDimension struct {
+	ID          int    `json:"id"`
+	DisplayName string `json:"display_name"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	IsBulk      bool   `json:"is_bulk"`
+}
+
+type CustomDimensionList struct {
+	Dimensions []*CustomDimension `json:"customDimensions"`
+}
+
 func NewHippo(agent string, email string, token string) *Client {
 	c := &Client{http: http.DefaultClient, UsrAgent: agent, UsrEmail: email, UsrToken: token}
 	return c
@@ -85,7 +97,7 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil || (resp.StatusCode >= 300) {
 		if err == nil {
 			err = fmt.Errorf("http error %d: %s", resp.StatusCode, buf)
 		}
@@ -100,4 +112,61 @@ func (c *Client) EncodeReq(r *Req) ([]byte, error) {
 	} else {
 		return b, nil
 	}
+}
+
+// Create any dimensions which are not present for the given company.
+func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (int, error) {
+	var currentSet CustomDimensionList
+	found := map[string]bool{}
+	done := 0
+
+	for col, _ := range required {
+		found[col] = false
+	}
+
+	url := fmt.Sprintf("%s/api/v5/customdimensions", apiHost)
+	if req, err := c.NewRequest("GET", url, nil); err != nil {
+		return done, err
+	} else {
+		if res, err := c.Do(context.Background(), req); err != nil {
+			return done, err
+		} else {
+			if err := json.Unmarshal(res, &currentSet); err != nil {
+				return done, err
+			} else {
+				for _, dim := range currentSet.Dimensions {
+					if _, ok := found[dim.Name]; ok {
+						found[dim.Name] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Now, try to make any dimensions not found
+	for col, present := range found {
+		if !present {
+			cd := CustomDimension{
+				DisplayName: required[col],
+				Name:        col,
+				Type:        "string",
+				IsBulk:      true,
+			}
+			if b, err := json.Marshal(cd); err != nil {
+				return done, err
+			} else {
+				url := fmt.Sprintf("%s/api/v5/customdimension", apiHost)
+				if req, err := c.NewRequest("POST", url, b); err != nil {
+					return done, err
+				} else {
+					if _, err := c.Do(context.Background(), req); err != nil {
+						return done, err
+					} else {
+						done++
+					}
+				}
+			}
+		}
+	}
+	return done, nil
 }
