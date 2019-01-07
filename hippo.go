@@ -7,6 +7,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
+)
+
+const (
+	MAX_TAG_LEN    = 128
+	MAX_HIPPO_SIZE = 3000000 // split requests up which are bigger than this (3MB ish)
 )
 
 type Client struct {
@@ -48,10 +54,11 @@ type Delete struct {
 }
 
 type Req struct {
-	Replace  bool     `json:"replace_all"`
-	Complete bool     `json:"complete"`
-	Upserts  []Upsert `json:"upserts,omitempty"`
-	Deletes  []Delete `json:"deletes,omitempty"`
+	Replace    bool     `json:"replace_all"`
+	Complete   bool     `json:"complete"`
+	TTLMinutes int      `json:"ttl_minutes"`
+	Upserts    []Upsert `json:"upserts,omitempty"`
+	Deletes    []Delete `json:"deletes,omitempty"`
 }
 
 type CustomDimension struct {
@@ -60,6 +67,7 @@ type CustomDimension struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	IsBulk      bool   `json:"is_bulk"`
+	IsInternal  bool   `json:"internal"`
 }
 
 type CustomDimensionList struct {
@@ -106,12 +114,66 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 	return buf, nil
 }
 
-func (c *Client) EncodeReq(r *Req) ([]byte, error) {
-	if b, err := json.Marshal(r); err != nil {
-		return nil, err
-	} else {
-		return b, nil
+func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
+
+	encode := func(r *Req) ([]byte, error) {
+		if b, err := json.Marshal(r); err != nil {
+			return nil, err
+		} else {
+			return b, nil
+		}
 	}
+
+	// If the size is small enough, just return here. Assume default case
+	init, err := encode(rFull)
+	if err != nil {
+		return nil, 0, err
+	} else if len(init) < MAX_HIPPO_SIZE {
+		return [][]byte{init}, len(rFull.Upserts), nil
+	}
+
+	// Here, have to split this request into a group
+	parts := (len(init) / MAX_HIPPO_SIZE) + 1
+	upsertPerPart := len(rFull.Upserts) / parts
+	reqArrary := make([][]byte, parts)
+	lastUp := 0
+	numUpserts := 0
+
+	for i := 0; i < parts-1; i++ {
+		rTmp := &Req{
+			Replace:    rFull.Replace,
+			Complete:   false,
+			TTLMinutes: rFull.TTLMinutes,
+			Upserts:    rFull.Upserts[lastUp : lastUp+upsertPerPart],
+		}
+
+		next, err := encode(rTmp)
+		if err != nil {
+			return nil, 0, err
+		} else {
+			reqArrary[i] = next
+		}
+		lastUp += upsertPerPart
+		numUpserts += len(rTmp.Upserts)
+	}
+
+	// Last one has to be handled seperately
+	rLast := &Req{
+		Replace:    rFull.Replace,
+		Complete:   true,
+		TTLMinutes: rFull.TTLMinutes,
+		Upserts:    rFull.Upserts[lastUp:],
+	}
+
+	numUpserts += len(rLast.Upserts)
+	next, err := encode(rLast)
+	if err != nil {
+		return nil, 0, err
+	} else {
+		reqArrary[parts-1] = next
+	}
+
+	return reqArrary, numUpserts, nil
 }
 
 // Create any dimensions which are not present for the given company.
@@ -124,7 +186,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 		found[col] = false
 	}
 
-	url := fmt.Sprintf("%s/api/v5/customdimensions", apiHost)
+	url := fmt.Sprintf("%s/api/internal/customdimensions", apiHost)
 	if req, err := c.NewRequest("GET", url, nil); err != nil {
 		return done, err
 	} else {
@@ -151,16 +213,18 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 				Name:        col,
 				Type:        "string",
 				IsBulk:      true,
+				IsInternal:  strings.HasPrefix(col, "kt_"),
 			}
 			if b, err := json.Marshal(cd); err != nil {
 				return done, err
 			} else {
-				url := fmt.Sprintf("%s/api/v5/customdimension", apiHost)
+				url := fmt.Sprintf("%s/api/internal/customdimension", apiHost)
 				if req, err := c.NewRequest("POST", url, b); err != nil {
 					return done, err
 				} else {
 					if _, err := c.Do(context.Background(), req); err != nil {
 						return done, err
+						//fmt.Printf("Warn, ensuring dimension failed: %s\n", err)
 					} else {
 						done++
 					}
@@ -169,4 +233,11 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 		}
 	}
 	return done, nil
+}
+
+func TruncateStringForMaxTagLen(str string) string {
+	if len(str) > MAX_TAG_LEN {
+		return str[0:MAX_TAG_LEN]
+	}
+	return str
 }
