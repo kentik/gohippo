@@ -223,8 +223,13 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 					return done, err
 				} else {
 					if _, err := c.Do(context.Background(), req); err != nil {
-						return done, err
-						//fmt.Printf("Warn, ensuring dimension failed: %s\n", err)
+						if !strings.Contains(err.Error(), "already in use") {
+							//fmt.Printf("Warn, ensuring dimension failed: %s\n", err)
+							return done, err
+						}
+						// The column already exists. This can happen for columns that don't have a 'c_' prefix, such as 'kt_' columns.
+						// We get into this situation because our API call to get existing columns doesn't return these columns,
+						// so we're here trying to create them.
 					} else {
 						done++
 					}
