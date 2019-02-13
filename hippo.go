@@ -115,6 +115,9 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 }
 
 func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
+	// swap out our local copy with a compacted one that ensures all criteria are grouped by value
+	tmp := compactReq(*rFull)
+	rFull = &tmp
 
 	encode := func(r *Req) ([]byte, error) {
 		if b, err := json.Marshal(r); err != nil {
@@ -174,6 +177,37 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 	}
 
 	return reqArrary, numUpserts, nil
+}
+
+// Compact a request down to combine criteria with the same values, returning a new request.
+// - returned struct shouldn't be modified, because it shares slices with the original
+func compactReq(rFull Req) Req {
+	rulesByLowerValue := make(map[string][]Rule)
+	valByLowerVal := make(map[string]string)
+
+	for _, upsert := range rFull.Upserts {
+		valLower := strings.ToLower(upsert.Val)
+		valByLowerVal[valLower] = upsert.Val
+		if _, found := rulesByLowerValue[valLower]; !found {
+			rulesByLowerValue[valLower] = make([]Rule, 0, len(upsert.Rules))
+		}
+		for _, rule := range upsert.Rules {
+			rulesByLowerValue[valLower] = append(rulesByLowerValue[valLower], rule)
+		}
+	}
+
+	// re-build the upserts collection
+	// - start with a copied instance, which shares the underlying slices
+	// - then replace the Upserts slice
+	ret := rFull
+	ret.Upserts = make([]Upsert, 0, len(rulesByLowerValue))
+	for valLower, rules := range rulesByLowerValue {
+		ret.Upserts = append(ret.Upserts, Upsert{
+			Val:   valByLowerVal[valLower],
+			Rules: rules,
+		})
+	}
+	return ret
 }
 
 // Create any dimensions which are not present for the given company.
