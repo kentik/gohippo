@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -16,10 +19,11 @@ const (
 )
 
 type Client struct {
-	http     *http.Client
-	UsrAgent string
-	UsrEmail string
-	UsrToken string
+	http      *http.Client
+	transport *http.Transport
+	UsrAgent  string
+	UsrEmail  string
+	UsrToken  string
 }
 
 type Rule struct {
@@ -75,8 +79,34 @@ type CustomDimensionList struct {
 }
 
 func NewHippo(agent string, email string, token string) *Client {
-	c := &Client{http: http.DefaultClient, UsrAgent: agent, UsrEmail: email, UsrToken: token}
-	return c
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	return &Client{
+		http:      client,
+		transport: transport,
+		UsrAgent:  agent,
+		UsrEmail:  email,
+		UsrToken:  token,
+	}
+}
+
+func (c *Client) SetProxy(url *url.URL) {
+	c.transport.Proxy = http.ProxyURL(url)
 }
 
 func (c *Client) NewRequest(method string, url string, data []byte) (*http.Request, error) {
