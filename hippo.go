@@ -27,26 +27,50 @@ type Client struct {
 }
 
 type Rule struct {
-	Dir                string   `json:"direction,omitempty"`
-	Ports              []string `json:"port,omitempty"`
-	Protocols          []uint   `json:"protocol,omitempty"`
-	ASNs               []string `json:"asn,omitempty"`
-	VLanRanges         []string `json:"vlans,omitempty"`
-	LastHopASNNames    []string `json:"lasthop_as_name,omitempty"`
-	NextHopASNs        []string `json:"nexthop_asn,omitempty"`
-	NextHopASNNames    []string `json:"nexthop_as_name,omitempty"`
-	BGPASPaths         []string `json:"bgp_aspath,omitempty"`
-	BGPCommunities     []string `json:"bgp_community,omitempty"`
-	TCPFlags           uint16   `json:"tcp_flags,omitempty"`
-	IPAddresses        []string `json:"addr,omitempty"`
-	MACAddresses       []string `json:"mac,omitempty"`
-	CountryCodes       []string `json:"country,omitempty"`
-	SiteNames          []string `json:"site,omitempty"`
-	DeviceTypes        []string `json:"device_type,omitempty"`
-	InterfaceNames     []string `json:"interface_name,omitempty"`
-	DeviceNames        []string `json:"device_name,omitempty"`
-	NextHopIPAddresses []string `json:"nexthop,omitempty"`
+	Dir                string       `json:"direction,omitempty"`
+	Ports              []string     `json:"port,omitempty"`
+	Protocols          []uint       `json:"protocol,omitempty"`
+	ASNs               []string     `json:"asn,omitempty"`
+	VLanRanges         []string     `json:"vlans,omitempty"`
+	LastHopASNNames    []string     `json:"lasthop_as_name,omitempty"`
+	NextHopASNs        []string     `json:"nexthop_asn,omitempty"`
+	NextHopASNNames    []string     `json:"nexthop_as_name,omitempty"`
+	BGPASPaths         []string     `json:"bgp_aspath,omitempty"`
+	BGPCommunities     []string     `json:"bgp_community,omitempty"`
+	TCPFlags           uint16       `json:"tcp_flags,omitempty"`
+	IPAddresses        []string     `json:"addr,omitempty"`
+	MACAddresses       []string     `json:"mac,omitempty"`
+	CountryCodes       []string     `json:"country,omitempty"`
+	SiteNames          []string     `json:"site,omitempty"`
+	DeviceTypes        []string     `json:"device_type,omitempty"`
+	InterfaceNames     []string     `json:"interface_name,omitempty"`
+	DeviceNames        []string     `json:"device_name,omitempty"`
+	NextHopIPAddresses []string     `json:"nexthop,omitempty"`
+	Int00              []string     `json:"int00,omitempty"`
+	Int01              []string     `json:"int01,omitempty"`
+	Int02              []string     `json:"int02,omitempty"`
+	Int03              []string     `json:"int03,omitempty"`
+	Int04              []string     `json:"int04,omitempty"`
+	Int05              []string     `json:"int05,omitempty"`
+	Str00              []FlexString `json:"str00,omitempty"`
+	Str01              []FlexString `json:"str01,omitempty"`
+	Str02              []FlexString `json:"str02,omitempty"`
+	Str03              []FlexString `json:"str03,omitempty"`
+	Str04              []FlexString `json:"str04,omitempty"`
+	Str05              []FlexString `json:"str05,omitempty"`
 }
+
+type FlexString struct {
+	Action Action `json:"action"`
+	Value  string `json:"value"`
+}
+
+type Action string
+
+const (
+	Exact  Action = "exact"
+	Prefix Action = "prefix"
+)
 
 type Upsert struct {
 	Val   string `json:"value"`

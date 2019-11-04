@@ -1,6 +1,7 @@
 package hippo
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -165,4 +166,40 @@ func TestCompactReqNoCompact(t *testing.T) {
 	// we don't force the case on the value, it just happens that we take the last case seen
 	assert.True(t, ("my device 1" == compactReq.Upserts[0].Val && "My device 2" == compactReq.Upserts[1].Val) ||
 		("my device 1" == compactReq.Upserts[1].Val && "My device 2" == compactReq.Upserts[0].Val))
+}
+
+func TestFlexStringEncoding(t *testing.T) {
+	assert := assert.New(t)
+
+	rule := Rule{
+		Str00: []FlexString{
+			FlexString{
+				Action: Exact,
+				Value:  "foo",
+			},
+			FlexString{
+				Action: Prefix,
+				Value:  "bar",
+			},
+		},
+	}
+
+	expect, err := json.MarshalIndent(map[string]interface{}{
+		"str00": []map[string]interface{}{
+			map[string]interface{}{
+				"action": "exact",
+				"value":  "foo",
+			},
+			map[string]interface{}{
+				"action": "prefix",
+				"value":  "bar",
+			},
+		},
+	}, "", "  ")
+	assert.NoError(err)
+
+	actual, err := json.MarshalIndent(&rule, "", "  ")
+	assert.NoError(err)
+
+	assert.Equal(string(expect), string(actual))
 }
