@@ -24,6 +24,8 @@ type Client struct {
 	UsrAgent  string
 	UsrEmail  string
 	UsrToken  string
+
+	Sender *ReqSender // optional - to help track batch origin
 }
 
 type Rule struct {
@@ -81,12 +83,20 @@ type Delete struct {
 	Val string `json:"value"`
 }
 
+// ReqSender holds metadata about the sender - optional
+type ReqSender struct {
+	ServiceName     string `json:"service_name,omitempty"`
+	ServiceInstance string `json:"service_instance,omitempty"`
+	HostName        string `json:"host_name,omitempty"`
+}
+
 type Req struct {
-	Replace    bool     `json:"replace_all"`
-	Complete   bool     `json:"complete"`
-	TTLMinutes int      `json:"ttl_minutes"`
-	Upserts    []Upsert `json:"upserts,omitempty"`
-	Deletes    []Delete `json:"deletes,omitempty"`
+	Replace    bool       `json:"replace_all"`
+	Complete   bool       `json:"complete"`
+	TTLMinutes int        `json:"ttl_minutes"`
+	Upserts    []Upsert   `json:"upserts,omitempty"`
+	Deletes    []Delete   `json:"deletes,omitempty"`
+	Sender     *ReqSender `json:"sender,omitempty"` // optional info about the sender
 }
 
 type CustomDimension struct {
@@ -126,6 +136,15 @@ func NewHippo(agent string, email string, token string) *Client {
 		UsrAgent:  agent,
 		UsrEmail:  email,
 		UsrToken:  token,
+	}
+}
+
+// SetSenderInfo sets optional metadata about the service sending batches
+func (c *Client) SetSenderInfo(serviceName string, serviceInstance string, hostName string) {
+	c.Sender = &ReqSender{
+		ServiceName:     serviceName,
+		ServiceInstance: serviceInstance,
+		HostName:        hostName,
 	}
 }
 
@@ -202,6 +221,7 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 			Complete:   false,
 			TTLMinutes: rFull.TTLMinutes,
 			Upserts:    rFull.Upserts[lastUp : lastUp+upsertPerPart],
+			Sender:     c.Sender,
 		}
 
 		next, err := encode(rTmp)
@@ -220,6 +240,7 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 		Complete:   true,
 		TTLMinutes: rFull.TTLMinutes,
 		Upserts:    rFull.Upserts[lastUp:],
+		Sender:     c.Sender,
 	}
 
 	numUpserts += len(rLast.Upserts)
