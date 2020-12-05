@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,7 @@ type Client struct {
 	UsrToken  string
 
 	Sender *ReqSender // optional - to help track batch origin
+	lock   sync.RWMutex
 }
 
 type Rule struct {
@@ -141,6 +143,9 @@ func NewHippo(agent string, email string, token string) *Client {
 
 // SetSenderInfo sets optional metadata about the service sending batches
 func (c *Client) SetSenderInfo(serviceName string, serviceInstance string, hostName string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	c.Sender = &ReqSender{
 		ServiceName:     serviceName,
 		ServiceInstance: serviceInstance,
@@ -188,8 +193,12 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 }
 
 func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	// swap out our local copy with a compacted one that ensures all criteria are grouped by value
 	tmp := compactReq(*rFull)
+	tmp.Sender = c.Sender
 	rFull = &tmp
 
 	encode := func(r *Req) ([]byte, error) {
