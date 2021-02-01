@@ -9,17 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEncodeReq(t *testing.T) {
+func TestEncodeTagBatchPart(t *testing.T) {
 
 	c := NewHippo("agent", "email", "token")
 
 	// Basic
-	r := &Req{
-		Replace:  true,
-		Complete: true,
-		Upserts:  []Upsert{},
+	r := &TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts:    []TagUpsert{},
 	}
-	bAll, numUp, err := c.EncodeReq(r)
+	bAll, numUp, err := c.EncodeTagBatchPart(r)
 
 	assert.NoError(t, err)
 	assert.Equal(t, numUp, len(r.Upserts))
@@ -33,25 +33,25 @@ func TestEncodeReq(t *testing.T) {
 		devicename[i] = "B"
 	}
 	deviceNameBase := strings.Join(devicename, "") + "_%d"
-	r = &Req{
-		Replace:  true,
-		Complete: true,
-		Upserts:  make([]Upsert, MAX_HIPPO_SIZE/100),
+	r = &TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts:    make([]TagUpsert, MAX_HIPPO_SIZE/100),
 	}
 
 	for i := 0; i < MAX_HIPPO_SIZE/100; i++ {
-		r.Upserts[i] = Upsert{
-			Val: fmt.Sprintf("%d", i),
-			Rules: []Rule{
+		r.Upserts[i] = TagUpsert{
+			Value: fmt.Sprintf("%d", i),
+			Criteria: []TagCriteria{
 				{
-					Dir:         "dst",
-					DeviceNames: []string{fmt.Sprintf(deviceNameBase, i)},
+					Direction:         "dst",
+					DeviceNameRegexes: []string{fmt.Sprintf(deviceNameBase, i)},
 				},
 			},
 		}
 	}
 
-	bAllNew, numUp, err := c.EncodeReq(r)
+	bAllNew, numUp, err := c.EncodeTagBatchPart(r)
 	assert.NoError(t, err)
 
 	assert.Equal(t, len(r.Upserts), numUp, "Missing upserts")
@@ -60,25 +60,25 @@ func TestEncodeReq(t *testing.T) {
 	}
 
 	// One more with an odd number of segments expected
-	r = &Req{
-		Replace:  true,
-		Complete: true,
-		Upserts:  make([]Upsert, MAX_HIPPO_SIZE/33),
+	r = &TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts:    make([]TagUpsert, MAX_HIPPO_SIZE/33),
 	}
 
 	for i := 0; i < MAX_HIPPO_SIZE/33; i++ {
-		r.Upserts[i] = Upsert{
-			Val: fmt.Sprintf("%d", i),
-			Rules: []Rule{
+		r.Upserts[i] = TagUpsert{
+			Value: fmt.Sprintf("%d", i),
+			Criteria: []TagCriteria{
 				{
-					Dir:         "dst",
-					DeviceNames: []string{fmt.Sprintf(deviceNameBase, i)},
+					Direction:         "dst",
+					DeviceNameRegexes: []string{fmt.Sprintf(deviceNameBase, i)},
 				},
 			},
 		}
 	}
 
-	bAllNew, numUp, err = c.EncodeReq(r)
+	bAllNew, numUp, err = c.EncodeTagBatchPart(r)
 	assert.NoError(t, err)
 
 	assert.Equal(t, len(r.Upserts), numUp, "Missing upserts")
@@ -87,104 +87,106 @@ func TestEncodeReq(t *testing.T) {
 	}
 }
 
-// TestCompactReq tests that compactReq compacts one upsert with two upserts with the same value
+// TestCompactTagBatchPart tests that compactTagBatchPart compacts one upsert with two upserts with the same value
 // (but different cases) collapses them down into one with two rules
-func TestCompactReq(t *testing.T) {
-	r := Req{
-		Replace:  true,
-		Complete: true,
-		Upserts: []Upsert{
-			Upsert{
-				Val: "my device",
-				Rules: []Rule{
+func TestCompactTagBatchPart(t *testing.T) {
+	r := TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			TagUpsert{
+				Value: "my device",
+				Criteria: []TagCriteria{
 					{
-						Dir:         "dst",
-						DeviceNames: []string{"foo"},
+						Direction:         "dst",
+						DeviceNameRegexes: []string{"foo"},
 					},
 				},
 			},
-			Upsert{
-				Val: "My device",
-				Rules: []Rule{
+			TagUpsert{
+				Value: "My device",
+				Criteria: []TagCriteria{
 					{
-						Dir:         "dst",
-						DeviceNames: []string{"bar"},
-					},
-				},
-			},
-		},
-	}
-
-	compactReq := compactReq(r)
-	assert.True(t, compactReq.Replace)
-	assert.True(t, compactReq.Complete)
-	assert.Equal(t, 1, len(compactReq.Upserts))
-
-	// we don't force the case on the value, it just happens that we take the last case seen
-	assert.Equal(t, "My device", compactReq.Upserts[0].Val)
-	assert.Equal(t, 2, len(compactReq.Upserts[0].Rules))
-	assert.Equal(t, "dst", compactReq.Upserts[0].Rules[0].Dir)
-	assert.Equal(t, "dst", compactReq.Upserts[0].Rules[1].Dir)
-	assert.Equal(t, 1, len(compactReq.Upserts[0].Rules[0].DeviceNames))
-	assert.Equal(t, 1, len(compactReq.Upserts[0].Rules[1].DeviceNames))
-	assert.Equal(t, "foo", compactReq.Upserts[0].Rules[0].DeviceNames[0])
-	assert.Equal(t, "bar", compactReq.Upserts[0].Rules[1].DeviceNames[0])
-}
-
-// TestCompactReqNoCompact makes sure we don't combine two values that aren't the same
-func TestCompactReqNoCompact(t *testing.T) {
-	r := Req{
-		Replace:  true,
-		Complete: true,
-		Upserts: []Upsert{
-			Upsert{
-				Val: "my device 1",
-				Rules: []Rule{
-					{
-						Dir:         "dst",
-						DeviceNames: []string{"foo"},
-					},
-				},
-			},
-			Upsert{
-				Val: "My device 2",
-				Rules: []Rule{
-					{
-						Dir:         "dst",
-						DeviceNames: []string{"bar"},
+						Direction:         "dst",
+						DeviceNameRegexes: []string{"bar"},
 					},
 				},
 			},
 		},
 	}
 
-	compactReq := compactReq(r)
-	assert.True(t, compactReq.Replace)
-	assert.True(t, compactReq.Complete)
-	assert.Equal(t, 2, len(compactReq.Upserts))
+	compactTagBatchPart := compactTagBatchPart(r)
+	assert.True(t, compactTagBatchPart.ReplaceAll)
+	assert.True(t, compactTagBatchPart.IsComplete)
+	assert.Equal(t, 1, len(compactTagBatchPart.Upserts))
 
 	// we don't force the case on the value, it just happens that we take the last case seen
-	assert.True(t, ("my device 1" == compactReq.Upserts[0].Val && "My device 2" == compactReq.Upserts[1].Val) ||
-		("my device 1" == compactReq.Upserts[1].Val && "My device 2" == compactReq.Upserts[0].Val))
+	assert.Equal(t, "My device", compactTagBatchPart.Upserts[0].Value)
+	assert.Equal(t, 2, len(compactTagBatchPart.Upserts[0].Criteria))
+	assert.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[0].Direction)
+	assert.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[1].Direction)
+	assert.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes))
+	assert.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes))
+	assert.Equal(t, "foo", compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes[0])
+	assert.Equal(t, "bar", compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes[0])
 }
 
-func TestFlexStringEncoding(t *testing.T) {
+// TestCompactTagBatchPartNoCompact makes sure we don't combine two values that aren't the same
+func TestCompactTagBatchPartNoCompact(t *testing.T) {
+	r := TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			TagUpsert{
+				Value: "my device 1",
+				Criteria: []TagCriteria{
+					{
+						Direction:         "dst",
+						DeviceNameRegexes: []string{"foo"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "My device 2",
+				Criteria: []TagCriteria{
+					{
+						Direction:         "dst",
+						DeviceNameRegexes: []string{"bar"},
+					},
+				},
+			},
+		},
+	}
+
+	compactTagBatchPart := compactTagBatchPart(r)
+	assert.True(t, compactTagBatchPart.ReplaceAll)
+	assert.True(t, compactTagBatchPart.IsComplete)
+	assert.Equal(t, 2, len(compactTagBatchPart.Upserts))
+
+	// we don't force the case on the value, it just happens that we take the last case seen
+	assert.True(t, ("my device 1" == compactTagBatchPart.Upserts[0].Value && "My device 2" == compactTagBatchPart.Upserts[1].Value) ||
+		("my device 1" == compactTagBatchPart.Upserts[1].Value && "My device 2" == compactTagBatchPart.Upserts[0].Value))
+}
+
+func TestFlexStringCriteriaEncoding(t *testing.T) {
 	assert := assert.New(t)
 
-	rule := Rule{
-		Str00: []FlexString{
-			FlexString{
-				Action: Exact,
+	rule := TagCriteria{
+		Direction: "either",
+		Str00: []FlexStringCriteria{
+			FlexStringCriteria{
+				Action: FlexStringActionExact,
 				Value:  "foo",
 			},
-			FlexString{
-				Action: Prefix,
+			FlexStringCriteria{
+				Action: FlexStringActionPrefix,
 				Value:  "bar",
 			},
 		},
 	}
 
 	expect, err := json.MarshalIndent(map[string]interface{}{
+		"direction": "either",
 		"str00": []map[string]interface{}{
 			map[string]interface{}{
 				"action": "exact",
