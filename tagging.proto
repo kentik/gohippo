@@ -1,0 +1,140 @@
+syntax = "proto3";
+
+package hippo;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+// TagBatchPartSender holds metadata about the sender
+message TagBatchPartSender {
+	string ServiceName = 1 [(gogoproto.jsontag) = "service_name,omitempty"];
+	string ServiceInstance = 2 [(gogoproto.jsontag) = "service_instance,omitempty"];
+	string HostName = 3 [(gogoproto.jsontag) = "host_name,omitempty"];
+}
+
+// TagBatchPart represents a tag update batch from a customer via Kentik API
+message TagBatchPart {
+	uint64 ID = 1 [(gogoproto.jsontag) = "id"];
+	string BatchGUID = 2 [(gogoproto.jsontag) = "guid"];
+	bool ReplaceAll = 3 [(gogoproto.jsontag) = "replace_all"];
+	bool IsComplete = 4 [(gogoproto.jsontag) = "complete"];
+	repeated TagUpsert Upserts = 5 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "upserts"];
+	repeated TagDelete Deletes = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "deletes"];
+	uint32 TTLMinutes = 7 [(gogoproto.jsontag) = "ttl_minutes"];
+
+	// TagBatchSender will be logged to help track down who sent a batch
+	TagBatchPartSender Sender = 8 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "sender"];
+}
+
+// FlexStringCriteria defines how we match a flex column (STR00-STR16)
+message FlexStringCriteria {
+	string Action = 1 [(gogoproto.jsontag) = "action"]; // "exact", "prefix"
+	string Value = 2 [(gogoproto.jsontag) = "value"];
+}
+
+// TagCriteria defines the criteria of a tag
+message TagCriteria {
+	string Direction = 1 [(gogoproto.jsontag) = "direction"];
+	repeated string PortRanges = 2 [(gogoproto.jsontag) = "port,omitempty"];
+	repeated uint32 Protocols = 3 [(gogoproto.jsontag) = "protocol,omitempty"];
+	repeated string ASNRanges = 4 [(gogoproto.jsontag) = "asn,omitempty"];
+	repeated string VLanRanges = 5 [(gogoproto.jsontag) = "vlans,omitempty"];
+	repeated string LastHopASNNames = 6 [(gogoproto.jsontag) = "lasthop_as_name,omitempty"];
+	repeated string NextHopASNRanges = 7 [(gogoproto.jsontag) = "nexthop_asn,omitempty"];
+	repeated string NextHopASNNames = 8 [(gogoproto.jsontag) = "nexthop_as_name,omitempty"];
+	repeated string BGPASPaths = 9 [(gogoproto.jsontag) = "bgp_aspath,omitempty"];
+	repeated string BGPCommunities = 10 [(gogoproto.jsontag) = "bgp_community,omitempty"];
+	uint32 TCPFlags = 11 [(gogoproto.jsontag) = "tcp_flags,omitempty"];
+	repeated string IPAddresses = 12 [(gogoproto.jsontag) = "addr,omitempty"];
+	repeated string MACAddresses = 13 [(gogoproto.jsontag) = "mac,omitempty"];
+	repeated string CountryCodes = 14 [(gogoproto.jsontag) = "country,omitempty"];
+	repeated string SiteNameRegexes = 15 [(gogoproto.jsontag) = "site,omitempty"];
+	repeated string DeviceTypeRegexes = 16 [(gogoproto.jsontag) = "device_type,omitempty"];
+	repeated string InterfaceNameRegexes = 17 [(gogoproto.jsontag) = "interface_name,omitempty"];
+	repeated string DeviceNameRegexes = 18 [(gogoproto.jsontag) = "device_name,omitempty"];
+	repeated string NextHopIPAddresses = 19 [(gogoproto.jsontag) = "nexthop,omitempty"];
+
+	// flexible flow columns: strings
+	repeated FlexStringCriteria Str00 = 20 [(gogoproto.jsontag) = "str00,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str01 = 21 [(gogoproto.jsontag) = "str01,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str02 = 22 [(gogoproto.jsontag) = "str02,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str03 = 23 [(gogoproto.jsontag) = "str03,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str04 = 24 [(gogoproto.jsontag) = "str04,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str05 = 25 [(gogoproto.jsontag) = "str05,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str06 = 26 [(gogoproto.jsontag) = "str06,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str07 = 27 [(gogoproto.jsontag) = "str07,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str08 = 28 [(gogoproto.jsontag) = "str08,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str09 = 29 [(gogoproto.jsontag) = "str09,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str10 = 30 [(gogoproto.jsontag) = "str10,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str11 = 31 [(gogoproto.jsontag) = "str11,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str12 = 32 [(gogoproto.jsontag) = "str12,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str13 = 33 [(gogoproto.jsontag) = "str13,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str14 = 34 [(gogoproto.jsontag) = "str14,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str15 = 35 [(gogoproto.jsontag) = "str15,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str16 = 36 [(gogoproto.jsontag) = "str16,omitempty", (gogoproto.nullable) = false];
+
+	// flexible flow columns: uint64s
+	repeated string Int6400 = 37 [(gogoproto.jsontag) = "int64_00,omitempty"];
+	repeated string Int6401 = 38 [(gogoproto.jsontag) = "int64_01,omitempty"];
+	repeated string Int6402 = 39 [(gogoproto.jsontag) = "int64_02,omitempty"];
+	repeated string Int6403 = 40 [(gogoproto.jsontag) = "int64_03,omitempty"];
+	repeated string Int6404 = 41 [(gogoproto.jsontag) = "int64_04,omitempty"];
+
+	// flexible flow columns: app_protocol
+	repeated string AppProtocol = 42 [(gogoproto.jsontag) = "app_protocol,omitempty"];
+
+	// flexible flow columns: uint32s
+	repeated string Int00 = 43 [(gogoproto.jsontag) = "int00,omitempty"];
+	repeated string Int01 = 44 [(gogoproto.jsontag) = "int01,omitempty"];
+	repeated string Int02 = 45 [(gogoproto.jsontag) = "int02,omitempty"];
+	repeated string Int03 = 46 [(gogoproto.jsontag) = "int03,omitempty"];
+	repeated string Int04 = 47 [(gogoproto.jsontag) = "int04,omitempty"];
+	repeated string Int05 = 48 [(gogoproto.jsontag) = "int05,omitempty"];
+
+	// flexible flow columns: IP addresses
+	repeated string Inet00 = 49 [(gogoproto.jsontag) = "inet_00,omitempty"];
+	repeated string Inet01 = 50 [(gogoproto.jsontag) = "inet_01,omitempty"];
+	repeated string Inet02 = 51 [(gogoproto.jsontag) = "inet_02,omitempty"];
+	repeated string Inet03 = 52 [(gogoproto.jsontag) = "inet_03,omitempty"];
+	repeated string Inet04 = 53 [(gogoproto.jsontag) = "inet_04,omitempty"];
+}
+
+// TagUpsert represents a tag or set of populators that have been created or updated
+message TagUpsert {
+	string Value = 1 [(gogoproto.jsontag) = "value"];
+	repeated TagCriteria Criteria = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "criteria"];
+}
+
+// TagDelete represents a tag or populator that's been deleted
+message TagDelete {
+	string Value = 1 [(gogoproto.jsontag) = "value"];
+}
+
+// ASNRange represents a range of ASN numbers
+message ASNRange {
+	uint32 Start = 1;
+	uint32 End = 2;
+}
+
+// VLanRange represents a range of VLAN numbers
+message VLanRange {
+	uint32 Start = 1;
+	uint32 End = 2;
+}
+
+// PortRange represents a range of ports
+message PortRange {
+	uint32 Start = 1;
+	uint32 End = 2;
+}
+
+// FlexUint32Range represents a uint64 range flex column (INT00-INT05)
+message FlexUint32Range {
+	uint32 Start = 1;
+	uint32 End = 2;
+}
+
+// FlexUint64Range represents a uint64 range flex column (INT64_00-INT64_04)
+message FlexUint64Range {
+	uint64 Start = 1;
+	uint64 End = 2;
+}

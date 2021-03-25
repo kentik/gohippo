@@ -26,80 +26,14 @@ type Client struct {
 	UsrEmail  string
 	UsrToken  string
 
-	Sender *ReqSender // optional - to help track batch origin
+	Sender TagBatchPartSender // optional - to help track batch origin
 	lock   sync.RWMutex
 }
 
-type Rule struct {
-	Dir                string       `json:"direction,omitempty"`
-	Ports              []string     `json:"port,omitempty"`
-	Protocols          []uint       `json:"protocol,omitempty"`
-	ASNs               []string     `json:"asn,omitempty"`
-	VLanRanges         []string     `json:"vlans,omitempty"`
-	LastHopASNNames    []string     `json:"lasthop_as_name,omitempty"`
-	NextHopASNs        []string     `json:"nexthop_asn,omitempty"`
-	NextHopASNNames    []string     `json:"nexthop_as_name,omitempty"`
-	BGPASPaths         []string     `json:"bgp_aspath,omitempty"`
-	BGPCommunities     []string     `json:"bgp_community,omitempty"`
-	TCPFlags           uint16       `json:"tcp_flags,omitempty"`
-	IPAddresses        []string     `json:"addr,omitempty"`
-	MACAddresses       []string     `json:"mac,omitempty"`
-	CountryCodes       []string     `json:"country,omitempty"`
-	SiteNames          []string     `json:"site,omitempty"`
-	DeviceTypes        []string     `json:"device_type,omitempty"`
-	InterfaceNames     []string     `json:"interface_name,omitempty"`
-	DeviceNames        []string     `json:"device_name,omitempty"`
-	NextHopIPAddresses []string     `json:"nexthop,omitempty"`
-	Int00              []string     `json:"int00,omitempty"`
-	Int01              []string     `json:"int01,omitempty"`
-	Int02              []string     `json:"int02,omitempty"`
-	Int03              []string     `json:"int03,omitempty"`
-	Int04              []string     `json:"int04,omitempty"`
-	Int05              []string     `json:"int05,omitempty"`
-	Str00              []FlexString `json:"str00,omitempty"`
-	Str01              []FlexString `json:"str01,omitempty"`
-	Str02              []FlexString `json:"str02,omitempty"`
-	Str03              []FlexString `json:"str03,omitempty"`
-	Str04              []FlexString `json:"str04,omitempty"`
-	Str05              []FlexString `json:"str05,omitempty"`
-}
-
-type FlexString struct {
-	Action Action `json:"action"`
-	Value  string `json:"value"`
-}
-
-type Action string
-
 const (
-	Exact  Action = "exact"
-	Prefix Action = "prefix"
+	FlexStringActionExact  = "exact"
+	FlexStringActionPrefix = "prefix"
 )
-
-type Upsert struct {
-	Val   string `json:"value"`
-	Rules []Rule `json:"criteria,omitempty"`
-}
-
-type Delete struct {
-	Val string `json:"value"`
-}
-
-// ReqSender holds metadata about the sender - optional
-type ReqSender struct {
-	ServiceName     string `json:"service_name,omitempty"`
-	ServiceInstance string `json:"service_instance,omitempty"`
-	HostName        string `json:"host_name,omitempty"`
-}
-
-type Req struct {
-	Replace    bool       `json:"replace_all"`
-	Complete   bool       `json:"complete"`
-	TTLMinutes int        `json:"ttl_minutes"`
-	Upserts    []Upsert   `json:"upserts,omitempty"`
-	Deletes    []Delete   `json:"deletes,omitempty"`
-	Sender     *ReqSender `json:"sender,omitempty"` // optional info about the sender
-}
 
 type CustomDimension struct {
 	ID          int    `json:"id"`
@@ -146,7 +80,7 @@ func (c *Client) SetSenderInfo(serviceName string, serviceInstance string, hostN
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.Sender = &ReqSender{
+	c.Sender = TagBatchPartSender{
 		ServiceName:     serviceName,
 		ServiceInstance: serviceInstance,
 		HostName:        hostName,
@@ -157,7 +91,7 @@ func (c *Client) SetProxy(url *url.URL) {
 	c.transport.Proxy = http.ProxyURL(url)
 }
 
-func (c *Client) NewRequest(method string, url string, data []byte) (*http.Request, error) {
+func (c *Client) NewTagBatchPartRequest(method string, url string, data []byte) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -192,16 +126,16 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 	return buf, nil
 }
 
-func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
+func (c *Client) EncodeTagBatchPart(rFull *TagBatchPart) ([][]byte, int, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	// swap out our local copy with a compacted one that ensures all criteria are grouped by value
-	tmp := compactReq(*rFull)
+	tmp := compactTagBatchPart(*rFull)
 	tmp.Sender = c.Sender
 	rFull = &tmp
 
-	encode := func(r *Req) ([]byte, error) {
+	encode := func(r *TagBatchPart) ([]byte, error) {
 		if b, err := json.Marshal(r); err != nil {
 			return nil, err
 		} else {
@@ -225,9 +159,9 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 	numUpserts := 0
 
 	for i := 0; i < parts-1; i++ {
-		rTmp := &Req{
-			Replace:    rFull.Replace,
-			Complete:   false,
+		rTmp := &TagBatchPart{
+			ReplaceAll: rFull.ReplaceAll,
+			IsComplete: false,
 			TTLMinutes: rFull.TTLMinutes,
 			Upserts:    rFull.Upserts[lastUp : lastUp+upsertPerPart],
 			Sender:     c.Sender,
@@ -244,9 +178,9 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 	}
 
 	// Last one has to be handled seperately
-	rLast := &Req{
-		Replace:    rFull.Replace,
-		Complete:   true,
+	rLast := &TagBatchPart{
+		ReplaceAll: rFull.ReplaceAll,
+		IsComplete: true,
 		TTLMinutes: rFull.TTLMinutes,
 		Upserts:    rFull.Upserts[lastUp:],
 		Sender:     c.Sender,
@@ -265,17 +199,17 @@ func (c *Client) EncodeReq(rFull *Req) ([][]byte, int, error) {
 
 // Compact a request down to combine criteria with the same values, returning a new request.
 // - returned struct shouldn't be modified, because it shares slices with the original
-func compactReq(rFull Req) Req {
-	rulesByLowerValue := make(map[string][]Rule)
+func compactTagBatchPart(rFull TagBatchPart) TagBatchPart {
+	rulesByLowerValue := make(map[string][]TagCriteria)
 	valByLowerVal := make(map[string]string)
 
 	for _, upsert := range rFull.Upserts {
-		valLower := strings.ToLower(upsert.Val)
-		valByLowerVal[valLower] = upsert.Val
+		valLower := strings.ToLower(upsert.Value)
+		valByLowerVal[valLower] = upsert.Value
 		if _, found := rulesByLowerValue[valLower]; !found {
-			rulesByLowerValue[valLower] = make([]Rule, 0, len(upsert.Rules))
+			rulesByLowerValue[valLower] = make([]TagCriteria, 0, len(upsert.Criteria))
 		}
-		for _, rule := range upsert.Rules {
+		for _, rule := range upsert.Criteria {
 			rulesByLowerValue[valLower] = append(rulesByLowerValue[valLower], rule)
 		}
 	}
@@ -284,11 +218,11 @@ func compactReq(rFull Req) Req {
 	// - start with a copied instance, which shares the underlying slices
 	// - then replace the Upserts slice
 	ret := rFull
-	ret.Upserts = make([]Upsert, 0, len(rulesByLowerValue))
+	ret.Upserts = make([]TagUpsert, 0, len(rulesByLowerValue))
 	for valLower, rules := range rulesByLowerValue {
-		ret.Upserts = append(ret.Upserts, Upsert{
-			Val:   valByLowerVal[valLower],
-			Rules: rules,
+		ret.Upserts = append(ret.Upserts, TagUpsert{
+			Value:    valByLowerVal[valLower],
+			Criteria: rules,
 		})
 	}
 	return ret
@@ -305,7 +239,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 	}
 
 	url := fmt.Sprintf("%s/api/internal/customdimensions", apiHost)
-	if req, err := c.NewRequest("GET", url, nil); err != nil {
+	if req, err := c.NewTagBatchPartRequest("GET", url, nil); err != nil {
 		return done, err
 	} else {
 		if res, err := c.Do(context.Background(), req); err != nil {
@@ -337,7 +271,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 				return done, err
 			} else {
 				url := fmt.Sprintf("%s/api/internal/customdimension", apiHost)
-				if req, err := c.NewRequest("POST", url, b); err != nil {
+				if req, err := c.NewTagBatchPartRequest("POST", url, b); err != nil {
 					return done, err
 				} else {
 					if _, err := c.Do(context.Background(), req); err != nil {
