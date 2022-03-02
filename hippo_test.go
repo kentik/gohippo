@@ -3,88 +3,220 @@ package hippo
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEncodeTagBatchPart(t *testing.T) {
+// Test sending a small batch through a fake server - not so concerned here with the structure of upserts
+func TestSinglePartBatch_Success(t *testing.T) {
+	a := assert.New(t)
 
-	c := NewHippo("agent", "email", "token")
+	serviceCalled := false
 
-	// Basic
-	r := &TagBatchPart{
+	cannedResponse := &APIServerResponse{
+		GUID:    "c8285742-f7a4-4870-933d-665b15c31eda",
+		Message: "success",
+		Error:   "",
+	}
+
+	// setup test server
+	mux := http.NewServeMux()
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+
+		serviceCalled = true
+
+		jsonPayload, err := ioutil.ReadAll(r.Body)
+
+		// verify the expected request
+		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		a.Equal(expectedRequest, string(jsonPayload))
+
+		// write the canned response
+		responseBytes, err := json.Marshal(cannedResponse)
+		a.NoError(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(responseBytes)
+	})
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+
+	// build the request
+	batch := TagBatchPart{
 		ReplaceAll: true,
 		IsComplete: true,
-		Upserts:    []TagUpsert{},
-	}
-	bAll, numUp, err := c.EncodeTagBatchPart(r)
-
-	assert.NoError(t, err)
-	assert.Equal(t, numUp, len(r.Upserts))
-	for _, b := range bAll {
-		assert.True(t, len(b) < MAX_HIPPO_SIZE, "Len: %d", len(b))
-	}
-
-	// Now, make sure that chunking is working
-	devicename := make([]string, 100)
-	for i := 0; i < 100; i++ {
-		devicename[i] = "B"
-	}
-	deviceNameBase := strings.Join(devicename, "") + "_%d"
-	r = &TagBatchPart{
-		ReplaceAll: true,
-		IsComplete: true,
-		Upserts:    make([]TagUpsert, MAX_HIPPO_SIZE/100),
-	}
-
-	for i := 0; i < MAX_HIPPO_SIZE/100; i++ {
-		r.Upserts[i] = TagUpsert{
-			Value: fmt.Sprintf("%d", i),
-			Criteria: []TagCriteria{
-				{
-					Direction:         "dst",
-					DeviceNameRegexes: []string{fmt.Sprintf(deviceNameBase, i)},
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
 				},
 			},
-		}
+		},
+		TTLMinutes: 0,
 	}
 
-	bAllNew, numUp, err := c.EncodeTagBatchPart(r)
-	assert.NoError(t, err)
+	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
+	response, err := sut.SendBatch(url, &batch)
+	a.NoError(err)
+	a.NotNil(response)
 
-	assert.Equal(t, len(r.Upserts), numUp, "Missing upserts")
-	for _, b := range bAllNew {
-		assert.True(t, len(b) < MAX_HIPPO_SIZE, "Len: %d; numparts: %d", len(b), len(bAllNew))
+	// make sure the fake web service was hit
+	a.True(serviceCalled)
+
+	// verify the response
+	a.Equal(1, response.PartsSent)
+	a.Equal(1, response.PartsTotal)
+	a.Equal(1, response.UpsertsSent)
+	a.Equal(1, response.UpsertsTotal)
+	a.Equal(0, response.DeletesSent)
+	a.Equal(0, response.DeletesTotal)
+	a.Equal(cannedResponse.GUID, response.BatchGUID)
+
+}
+
+// Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts
+func TestMultiPartBatch_Success(t *testing.T) {
+	a := assert.New(t)
+
+	serviceCalled := false
+
+	// same response both times
+	cannedResponse := &APIServerResponse{
+		GUID:    "c8285742-f7a4-4870-933d-665b15c31eda",
+		Message: "success",
+		Error:   "",
 	}
 
-	// One more with an odd number of segments expected
-	r = &TagBatchPart{
+	// expecting 2 requests
+	expectedRequests := []string{
+		// first request has no GUID, and has complete=false
+		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+
+		// second request has the GUID, and has complete=true
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]},{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+	}
+
+	lock := sync.Mutex{}
+	receivedRequests := make([]string, 0)
+
+	// setup test server
+	mux := http.NewServeMux()
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+
+		serviceCalled = true
+
+		jsonPayload, err := ioutil.ReadAll(r.Body)
+
+		lock.Lock()
+		receivedRequests = append(receivedRequests, string(jsonPayload))
+		lock.Unlock()
+
+		// write the canned response - same for both batches
+		responseBytes, err := json.Marshal(cannedResponse)
+		a.NoError(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(responseBytes)
+	})
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+
+	// force the client to use small batches - request as one part is 546 bytes - make the batch size 300
+	sut.OutgoingRequestSize = 300
+
+	// build the request
+	batch := TagBatchPart{
 		ReplaceAll: true,
 		IsComplete: true,
-		Upserts:    make([]TagUpsert, MAX_HIPPO_SIZE/33),
-	}
-
-	for i := 0; i < MAX_HIPPO_SIZE/33; i++ {
-		r.Upserts[i] = TagUpsert{
-			Value: fmt.Sprintf("%d", i),
-			Criteria: []TagCriteria{
-				{
-					Direction:         "dst",
-					DeviceNameRegexes: []string{fmt.Sprintf(deviceNameBase, i)},
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
 				},
 			},
-		}
+			{
+				Value: "test2",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"2.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test3",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"3.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test4",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"4.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test5",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"5.2.3.4"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 0,
 	}
 
-	bAllNew, numUp, err = c.EncodeTagBatchPart(r)
-	assert.NoError(t, err)
+	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
+	response, err := sut.SendBatch(url, &batch)
+	a.NoError(err)
+	a.NotNil(response)
 
-	assert.Equal(t, len(r.Upserts), numUp, "Missing upserts")
-	for _, b := range bAllNew {
-		assert.True(t, len(b) < MAX_HIPPO_SIZE, "Len: %d; numparts: %d", len(b), len(bAllNew))
-	}
+	// make sure the fake web service was hit
+	a.True(serviceCalled)
+	a.Equal(2, len(receivedRequests))
+
+	// verify the response
+	a.Equal(2, response.PartsSent)
+	a.Equal(2, response.PartsTotal)
+	a.Equal(5, response.UpsertsSent)
+	a.Equal(5, response.UpsertsTotal)
+	a.Equal(0, response.DeletesSent)
+	a.Equal(0, response.DeletesTotal)
+	a.Equal(cannedResponse.GUID, response.BatchGUID)
+
+	a.Equal(expectedRequests[0], receivedRequests[0])
+	a.Equal(expectedRequests[1], receivedRequests[1])
 }
 
 // TestCompactTagBatchPart tests that compactTagBatchPart compacts one upsert with two upserts with the same value
