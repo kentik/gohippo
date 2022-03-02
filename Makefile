@@ -28,7 +28,6 @@ $(_GOPATH)/src/github.com/gogo/protobuf/gogoproto:
 
 .PHONY: codegen
 codegen: \
-	$(_GOPATH)/src/github.com/gobuffalo/packr \
 	$(_GOPATH)/src/github.com/gogo/protobuf/protoc-gen-gogoslick \
 	$(_GOPATH)/bin/protoc-gen-gofast \
    	$(_GOPATH)/src/github.com/gogo/protobuf/proto \
