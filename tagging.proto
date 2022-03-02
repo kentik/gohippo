@@ -13,7 +13,7 @@ message TagBatchPartSender {
 
 // TagBatchPart represents a tag update batch from a customer via Kentik API
 message TagBatchPart {
-	uint64 ID = 1 [(gogoproto.jsontag) = "id"];
+	reserved 1;
 	string BatchGUID = 2 [(gogoproto.jsontag) = "guid"];
 	bool ReplaceAll = 3 [(gogoproto.jsontag) = "replace_all"];
 	bool IsComplete = 4 [(gogoproto.jsontag) = "complete"];
@@ -137,4 +137,11 @@ message FlexUint32Range {
 message FlexUint64Range {
 	uint64 Start = 1;
 	uint64 End = 2;
+}
+
+// APIServerResponse is the response from the server
+message APIServerResponse {
+	string GUID = 1 [(gogoproto.jsontag) = "guid,omitempty"];
+	string Message = 2 [(gogoproto.jsontag) = "message,omitempty"];
+	string Error = 3 [(gogoproto.jsontag) = "error,omitempty"];
 }
