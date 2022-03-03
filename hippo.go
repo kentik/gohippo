@@ -144,8 +144,8 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 }
 
 // SendBatchPart sends a batch to the server, in multiple requests, if necessary.
-// - may return non-nil SendBatchResponse on error, it'll report how far we got
-// - error will contain SendBatchResponse info
+// - may return non-nil SendBatchResult on error, it'll report how far we got
+// - error will contain SendBatchResult info
 func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart) (*SendBatchResult, error) {
 	c.lock.RLock()
 	sender := c.Sender
