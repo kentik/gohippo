@@ -146,7 +146,7 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 // SendBatchPart sends a batch to the server, in multiple requests, if necessary.
 // - may return non-nil SendBatchResponse on error, it'll report how far we got
 // - error will contain SendBatchResponse info
-func (c *Client) SendBatch(url string, batch *TagBatchPart) (*SendBatchResult, error) {
+func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart) (*SendBatchResult, error) {
 	c.lock.RLock()
 	sender := c.Sender
 	c.lock.RUnlock()
@@ -179,7 +179,7 @@ func (c *Client) SendBatch(url string, batch *TagBatchPart) (*SendBatchResult, e
 		if err != nil {
 			return ret, fmt.Errorf("Error building request to %s - [%s] - underlying error: %s", url, ret, err)
 		}
-		responseBytes, err := c.Do(context.Background(), req)
+		responseBytes, err := c.Do(ctx, req)
 		if err != nil {
 			return ret, fmt.Errorf("Error POSTing populators to %s - [%s] - underlying error: %s", url, ret, err)
 		}
@@ -300,7 +300,7 @@ func compactTagBatchPart(rFull TagBatchPart) *TagBatchPart {
 }
 
 // Create any dimensions which are not present for the given company.
-func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (int, error) {
+func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required map[string]string) (int, error) {
 	var currentSet CustomDimensionList
 	found := map[string]bool{}
 	done := 0
@@ -313,7 +313,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 	if req, err := c.NewTagBatchPartRequest("GET", url, nil); err != nil {
 		return done, err
 	} else {
-		if res, err := c.Do(context.Background(), req); err != nil {
+		if res, err := c.Do(ctx, req); err != nil {
 			return done, err
 		} else {
 			if err := json.Unmarshal(res, &currentSet); err != nil {
@@ -345,7 +345,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 				if req, err := c.NewTagBatchPartRequest("POST", url, b); err != nil {
 					return done, err
 				} else {
-					if _, err := c.Do(context.Background(), req); err != nil {
+					if _, err := c.Do(ctx, req); err != nil {
 						if !strings.Contains(err.Error(), "already in use") {
 							//fmt.Printf("Warn, ensuring dimension failed: %s\n", err)
 							return done, err
