@@ -89,6 +89,162 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 }
 
+// Test sending a small batch through a fake server - not so concerned here with the structure of upserts
+func TestSinglePartBatch_Error(t *testing.T) {
+	a := require.New(t)
+
+	serviceCalled := false
+
+	cannedResponse := &APIServerResponse{
+		GUID:    "",
+		Message: "",
+		Error:   "Internal error processing request - please re-submit this batch part, or the entire batch",
+	}
+
+	// setup test server
+	mux := http.NewServeMux()
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+
+		serviceCalled = true
+
+		jsonPayload, err := ioutil.ReadAll(r.Body)
+
+		// verify the expected request
+		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		a.Equal(expectedRequest, string(jsonPayload))
+
+		// write the canned response
+		responseBytes, err := json.Marshal(cannedResponse)
+		a.NoError(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(responseBytes)
+	})
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+
+	// build the request
+	batch := TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 0,
+	}
+
+	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
+	response, err := sut.SendBatch(context.Background(), url, &batch)
+	a.Error(err)
+	expectedError := `API response contained an error - [Batch GUID: ; Progress: 0/1 parts, 0/1 upserts, 0/0 deletes] - server message: ; server error: Internal error processing request - please re-submit this batch part, or the entire batch`
+	a.Equal(expectedError, err.Error())
+
+	a.NotNil(response)
+
+	// make sure the fake web service was hit
+	a.True(serviceCalled)
+
+	// verify the response
+	a.Equal(0, response.PartsSent)
+	a.Equal(1, response.PartsTotal)
+	a.Equal(0, response.UpsertsSent)
+	a.Equal(1, response.UpsertsTotal)
+	a.Equal(0, response.DeletesSent)
+	a.Equal(0, response.DeletesTotal)
+	a.Equal("", response.BatchGUID)
+}
+
+// Test sending a small batch through a fake server - not so concerned here with the structure of upserts
+func TestSinglePartBatch_MissingGUID(t *testing.T) {
+	a := require.New(t)
+
+	serviceCalled := false
+
+	cannedResponse := &APIServerResponse{
+		GUID:    "",
+		Message: "",
+		Error:   "",
+	}
+
+	// setup test server
+	mux := http.NewServeMux()
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+
+		serviceCalled = true
+
+		jsonPayload, err := ioutil.ReadAll(r.Body)
+
+		// verify the expected request
+		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		a.Equal(expectedRequest, string(jsonPayload))
+
+		// write the canned response
+		responseBytes, err := json.Marshal(cannedResponse)
+		a.NoError(err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(responseBytes)
+	})
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+
+	// build the request
+	batch := TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 0,
+	}
+
+	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
+	response, err := sut.SendBatch(context.Background(), url, &batch)
+	a.Error(err)
+	expectedError := `API response did not include a GUID for subsequent batches - [Batch GUID: ; Progress: 0/1 parts, 0/1 upserts, 0/0 deletes] - server message: ; server error: `
+	a.Equal(expectedError, err.Error())
+
+	a.NotNil(response)
+
+	// make sure the fake web service was hit
+	a.True(serviceCalled)
+
+	// verify the response
+	a.Equal(0, response.PartsSent)
+	a.Equal(1, response.PartsTotal)
+	a.Equal(0, response.UpsertsSent)
+	a.Equal(1, response.UpsertsTotal)
+	a.Equal(0, response.DeletesSent)
+	a.Equal(0, response.DeletesTotal)
+	a.Equal("", response.BatchGUID)
+}
+
 // Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts
 func TestMultiPartBatch_Success(t *testing.T) {
 	a := require.New(t)

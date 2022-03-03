@@ -190,8 +190,11 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 			if err := json.Unmarshal(responseBytes, &apiResponse); err != nil {
 				return ret, fmt.Errorf("Error unmarshalling API batch response - [%s] - underlying error: %s", ret, err)
 			}
+			if apiResponse.Error != "" {
+				return ret, fmt.Errorf("API response contained an error - [%s] - server message: %s; server error: %s", ret, apiResponse.Message, apiResponse.Error)
+			}
 			if apiResponse.GUID == "" {
-				return ret, fmt.Errorf("API response did not include a GUID for subsequent batches - [%s] - underlying error: %s", ret, apiResponse.Error)
+				return ret, fmt.Errorf("API response did not include a GUID for subsequent batches - [%s] - server message: %s; server error: %s", ret, apiResponse.Message, apiResponse.Error)
 			}
 			ret.BatchGUID = apiResponse.GUID
 		}
