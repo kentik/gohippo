@@ -253,7 +253,7 @@ func (c *Client) split(rFull *TagBatchPart) ([]TagBatchPart, error) {
 		lastUp += upsertPerPart
 	}
 
-	// Last one has to be handled seperately
+	// Last one has to be handled separately
 	ret[parts-1] = TagBatchPart{
 		ReplaceAll: rFull.ReplaceAll,
 		IsComplete: true,
