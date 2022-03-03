@@ -9,22 +9,38 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
+type SendBatchResult struct {
+	PartsSent    int
+	PartsTotal   int
+	UpsertsSent  int
+	UpsertsTotal int
+	DeletesSent  int
+	DeletesTotal int
+	BatchGUID    string
+}
+
+func (r *SendBatchResult) String() string {
+	return fmt.Sprintf("Batch GUID: %s; Progress: %d/%d parts, %d/%d upserts, %d/%d deletes", r.BatchGUID, r.PartsSent, r.PartsTotal, r.UpsertsSent, r.UpsertsTotal, r.DeletesSent, r.DeletesTotal)
+}
+
 const (
-	MAX_TAG_LEN    = 128
-	MAX_HIPPO_SIZE = 3000000 // split requests up which are bigger than this (3MB ish)
+	MAX_TAG_LEN            = 128
+	DEFAULT_MAX_HIPPO_SIZE = 3000000 // split requests up which are bigger than this (3MB ish)
 )
 
 type Client struct {
-	http      *http.Client
-	transport *http.Transport
-	UsrAgent  string
-	UsrEmail  string
-	UsrToken  string
+	http                *http.Client
+	transport           *http.Transport
+	UsrAgent            string
+	UsrEmail            string
+	UsrToken            string
+	OutgoingRequestSize int
 
 	Sender TagBatchPartSender // optional - to help track batch origin
 	lock   sync.RWMutex
@@ -67,11 +83,12 @@ func NewHippo(agent string, email string, token string) *Client {
 	}
 
 	return &Client{
-		http:      client,
-		transport: transport,
-		UsrAgent:  agent,
-		UsrEmail:  email,
-		UsrToken:  token,
+		http:                client,
+		transport:           transport,
+		UsrAgent:            agent,
+		UsrEmail:            email,
+		UsrToken:            token,
+		OutgoingRequestSize: DEFAULT_MAX_HIPPO_SIZE,
 	}
 }
 
@@ -126,80 +143,131 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 	return buf, nil
 }
 
-func (c *Client) EncodeTagBatchPart(rFull *TagBatchPart) ([][]byte, int, error) {
+// SendBatch sends a batch to the server, in multiple requests, if necessary.
+// - may return non-nil SendBatchResult on error, it'll report how far we got
+// - error will contain SendBatchResult info
+func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart) (*SendBatchResult, error) {
 	c.lock.RLock()
-	defer c.lock.RUnlock()
+	sender := c.Sender
+	c.lock.RUnlock()
 
-	// swap out our local copy with a compacted one that ensures all criteria are grouped by value
-	tmp := compactTagBatchPart(*rFull)
-	tmp.Sender = c.Sender
-	rFull = &tmp
+	// compact the batch, grouping the same values together
+	batch = compactTagBatchPart(*batch)
+	batch.Sender = sender
 
+	batchParts, err := c.split(batch)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := &SendBatchResult{
+		PartsTotal:   len(batchParts),
+		UpsertsTotal: len(batch.Upserts),
+		DeletesTotal: len(batch.Deletes),
+		BatchGUID:    "", // not known until we send the first part
+	}
+
+	for i, batchPart := range batchParts {
+		batchPart.BatchGUID = ret.BatchGUID
+
+		requestBytes, err := json.Marshal(batchPart)
+		if err != nil {
+			return ret, fmt.Errorf("Error JSON marshalling request batch - [%s] - underlying error: %s", ret, err)
+		}
+
+		req, err := c.NewTagBatchPartRequest("POST", url, requestBytes)
+		if err != nil {
+			return ret, fmt.Errorf("Error building request to %s - [%s] - underlying error: %s", url, ret, err)
+		}
+		responseBytes, err := c.Do(ctx, req)
+		if err != nil {
+			return ret, fmt.Errorf("Error POSTing populators to %s - [%s] - underlying error: %s", url, ret, err)
+		}
+
+		if i == 0 {
+			// first response returns the batch GUID, which we need to include in subsequent batches
+			apiResponse := APIServerResponse{}
+			if err := json.Unmarshal(responseBytes, &apiResponse); err != nil {
+				return ret, fmt.Errorf("Error unmarshalling API batch response - [%s] - underlying error: %s", ret, err)
+			}
+			if apiResponse.Error != "" {
+				return ret, fmt.Errorf("API response contained an error - [%s] - server message: %s; server error: %s", ret, apiResponse.Message, apiResponse.Error)
+			}
+			if apiResponse.GUID == "" {
+				return ret, fmt.Errorf("API response did not include a GUID for subsequent batches - [%s] - server message: %s; server error: %s", ret, apiResponse.Message, apiResponse.Error)
+			}
+			ret.BatchGUID = apiResponse.GUID
+		}
+
+		// update response
+		ret.PartsSent++
+		ret.UpsertsSent += len(batchPart.Upserts)
+		ret.DeletesSent += len(batchPart.Deletes)
+
+		// slow down the HTTP batches a bit to avoid rate limiting
+		time.Sleep(time.Second)
+	}
+
+	return ret, nil
+}
+
+// split a batch into parts small enough for sending through Kentik API
+func (c *Client) split(rFull *TagBatchPart) ([]TagBatchPart, error) {
 	encode := func(r *TagBatchPart) ([]byte, error) {
 		if b, err := json.Marshal(r); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Error JSON-marshalling batch: %s", err)
 		} else {
 			return b, nil
 		}
 	}
 
-	// If the size is small enough, just return here. Assume default case
-	init, err := encode(rFull)
+	serializedBytes, err := encode(rFull)
 	if err != nil {
-		return nil, 0, err
-	} else if len(init) < MAX_HIPPO_SIZE {
-		return [][]byte{init}, len(rFull.Upserts), nil
+		return nil, err
+	}
+
+	outgoingRequestSize := c.OutgoingRequestSize
+	if outgoingRequestSize <= 0 {
+		outgoingRequestSize = DEFAULT_MAX_HIPPO_SIZE
+	}
+
+	if len(serializedBytes) < outgoingRequestSize {
+		return []TagBatchPart{*rFull}, nil
 	}
 
 	// Here, have to split this request into a group
-	parts := (len(init) / MAX_HIPPO_SIZE) + 1
+	parts := (len(serializedBytes) / outgoingRequestSize) + 1
 	upsertPerPart := len(rFull.Upserts) / parts
-	reqArrary := make([][]byte, parts)
+	ret := make([]TagBatchPart, parts)
 	lastUp := 0
-	numUpserts := 0
 
 	for i := 0; i < parts-1; i++ {
-		rTmp := &TagBatchPart{
+		ret[i] = TagBatchPart{
 			ReplaceAll: rFull.ReplaceAll,
 			IsComplete: false,
 			TTLMinutes: rFull.TTLMinutes,
 			Upserts:    rFull.Upserts[lastUp : lastUp+upsertPerPart],
-			Sender:     c.Sender,
+			Sender:     rFull.Sender,
 		}
 
-		next, err := encode(rTmp)
-		if err != nil {
-			return nil, 0, err
-		} else {
-			reqArrary[i] = next
-		}
 		lastUp += upsertPerPart
-		numUpserts += len(rTmp.Upserts)
 	}
 
-	// Last one has to be handled seperately
-	rLast := &TagBatchPart{
+	// Last one has to be handled separately
+	ret[parts-1] = TagBatchPart{
 		ReplaceAll: rFull.ReplaceAll,
 		IsComplete: true,
 		TTLMinutes: rFull.TTLMinutes,
 		Upserts:    rFull.Upserts[lastUp:],
-		Sender:     c.Sender,
+		Sender:     rFull.Sender,
 	}
 
-	numUpserts += len(rLast.Upserts)
-	next, err := encode(rLast)
-	if err != nil {
-		return nil, 0, err
-	} else {
-		reqArrary[parts-1] = next
-	}
-
-	return reqArrary, numUpserts, nil
+	return ret, nil
 }
 
 // Compact a request down to combine criteria with the same values, returning a new request.
 // - returned struct shouldn't be modified, because it shares slices with the original
-func compactTagBatchPart(rFull TagBatchPart) TagBatchPart {
+func compactTagBatchPart(rFull TagBatchPart) *TagBatchPart {
 	rulesByLowerValue := make(map[string][]TagCriteria)
 	valByLowerVal := make(map[string]string)
 
@@ -225,11 +293,17 @@ func compactTagBatchPart(rFull TagBatchPart) TagBatchPart {
 			Criteria: rules,
 		})
 	}
-	return ret
+
+	// sort upserts by value - for testability and possibly to help make errors more understandable on server side
+	sort.SliceStable(ret.Upserts, func(i, j int) bool {
+		return ret.Upserts[i].Value < ret.Upserts[j].Value
+	})
+
+	return &ret
 }
 
 // Create any dimensions which are not present for the given company.
-func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (int, error) {
+func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required map[string]string) (int, error) {
 	var currentSet CustomDimensionList
 	found := map[string]bool{}
 	done := 0
@@ -242,7 +316,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 	if req, err := c.NewTagBatchPartRequest("GET", url, nil); err != nil {
 		return done, err
 	} else {
-		if res, err := c.Do(context.Background(), req); err != nil {
+		if res, err := c.Do(ctx, req); err != nil {
 			return done, err
 		} else {
 			if err := json.Unmarshal(res, &currentSet); err != nil {
@@ -274,7 +348,7 @@ func (c *Client) EnsureDimensions(apiHost string, required map[string]string) (i
 				if req, err := c.NewTagBatchPartRequest("POST", url, b); err != nil {
 					return done, err
 				} else {
-					if _, err := c.Do(context.Background(), req); err != nil {
+					if _, err := c.Do(ctx, req); err != nil {
 						if !strings.Contains(err.Error(), "already in use") {
 							//fmt.Printf("Warn, ensuring dimension failed: %s\n", err)
 							return done, err
