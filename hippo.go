@@ -222,12 +222,17 @@ func (c *Client) split(rFull *TagBatchPart) ([]TagBatchPart, error) {
 		return nil, err
 	}
 
-	if len(serializedBytes) < c.OutgoingRequestSize {
+	outgoingRequestSize := c.OutgoingRequestSize
+	if outgoingRequestSize <= 0 {
+		outgoingRequestSize = DEFAULT_MAX_HIPPO_SIZE
+	}
+
+	if len(serializedBytes) < outgoingRequestSize {
 		return []TagBatchPart{*rFull}, nil
 	}
 
 	// Here, have to split this request into a group
-	parts := (len(serializedBytes) / c.OutgoingRequestSize) + 1
+	parts := (len(serializedBytes) / outgoingRequestSize) + 1
 	upsertPerPart := len(rFull.Upserts) / parts
 	ret := make([]TagBatchPart, parts)
 	lastUp := 0
