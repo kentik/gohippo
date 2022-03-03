@@ -185,6 +185,7 @@ func (c *Client) SendBatch(url string, batch *TagBatchPart) (*SendBatchResult, e
 		}
 
 		if i == 0 {
+			// first response returns the batch GUID, which we need to include in subsequent batches
 			apiResponse := APIServerResponse{}
 			if err := json.Unmarshal(responseBytes, &apiResponse); err != nil {
 				return ret, fmt.Errorf("Error unmarshalling API batch response - [%s] - underlying error: %s", ret, err)
