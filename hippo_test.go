@@ -10,12 +10,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test sending a small batch through a fake server - not so concerned here with the structure of upserts
 func TestSinglePartBatch_Success(t *testing.T) {
-	a := assert.New(t)
+	a := require.New(t)
 
 	serviceCalled := false
 
@@ -91,7 +91,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 // Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts
 func TestMultiPartBatch_Success(t *testing.T) {
-	a := assert.New(t)
+	a := require.New(t)
 
 	serviceCalled := false
 
@@ -223,7 +223,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 
 // Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts - partial success
 func TestMultiPartBatch_PartialSuccess(t *testing.T) {
-	a := assert.New(t)
+	a := require.New(t)
 
 	serviceCalled := false
 
@@ -393,19 +393,19 @@ func TestCompactTagBatchPart(t *testing.T) {
 	}
 
 	compactTagBatchPart := compactTagBatchPart(r)
-	assert.True(t, compactTagBatchPart.ReplaceAll)
-	assert.True(t, compactTagBatchPart.IsComplete)
-	assert.Equal(t, 1, len(compactTagBatchPart.Upserts))
+	require.True(t, compactTagBatchPart.ReplaceAll)
+	require.True(t, compactTagBatchPart.IsComplete)
+	require.Equal(t, 1, len(compactTagBatchPart.Upserts))
 
 	// we don't force the case on the value, it just happens that we take the last case seen
-	assert.Equal(t, "My device", compactTagBatchPart.Upserts[0].Value)
-	assert.Equal(t, 2, len(compactTagBatchPart.Upserts[0].Criteria))
-	assert.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[0].Direction)
-	assert.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[1].Direction)
-	assert.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes))
-	assert.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes))
-	assert.Equal(t, "foo", compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes[0])
-	assert.Equal(t, "bar", compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes[0])
+	require.Equal(t, "My device", compactTagBatchPart.Upserts[0].Value)
+	require.Equal(t, 2, len(compactTagBatchPart.Upserts[0].Criteria))
+	require.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[0].Direction)
+	require.Equal(t, "dst", compactTagBatchPart.Upserts[0].Criteria[1].Direction)
+	require.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes))
+	require.Equal(t, 1, len(compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes))
+	require.Equal(t, "foo", compactTagBatchPart.Upserts[0].Criteria[0].DeviceNameRegexes[0])
+	require.Equal(t, "bar", compactTagBatchPart.Upserts[0].Criteria[1].DeviceNameRegexes[0])
 }
 
 // TestCompactTagBatchPartNoCompact makes sure we don't combine two values that aren't the same
@@ -436,17 +436,17 @@ func TestCompactTagBatchPartNoCompact(t *testing.T) {
 	}
 
 	compactTagBatchPart := compactTagBatchPart(r)
-	assert.True(t, compactTagBatchPart.ReplaceAll)
-	assert.True(t, compactTagBatchPart.IsComplete)
-	assert.Equal(t, 2, len(compactTagBatchPart.Upserts))
+	require.True(t, compactTagBatchPart.ReplaceAll)
+	require.True(t, compactTagBatchPart.IsComplete)
+	require.Equal(t, 2, len(compactTagBatchPart.Upserts))
 
 	// we don't force the case on the value, it just happens that we take the last case seen
-	assert.True(t, ("my device 1" == compactTagBatchPart.Upserts[0].Value && "My device 2" == compactTagBatchPart.Upserts[1].Value) ||
+	require.True(t, ("my device 1" == compactTagBatchPart.Upserts[0].Value && "My device 2" == compactTagBatchPart.Upserts[1].Value) ||
 		("my device 1" == compactTagBatchPart.Upserts[1].Value && "My device 2" == compactTagBatchPart.Upserts[0].Value))
 }
 
 func TestFlexStringCriteriaEncoding(t *testing.T) {
-	assert := assert.New(t)
+	require := require.New(t)
 
 	rule := TagCriteria{
 		Direction: "either",
@@ -475,10 +475,10 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 			},
 		},
 	}, "", "  ")
-	assert.NoError(err)
+	require.NoError(err)
 
 	actual, err := json.MarshalIndent(&rule, "", "  ")
-	assert.NoError(err)
+	require.NoError(err)
 
-	assert.Equal(string(expect), string(actual))
+	require.Equal(string(expect), string(actual))
 }
