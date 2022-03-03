@@ -118,15 +118,16 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
-		t.Helper()
+		lock.Lock()
+		defer lock.Unlock()
 
+		t.Helper()
 		serviceCalled = true
 
+		// keep track of the requests received
 		jsonPayload, err := ioutil.ReadAll(r.Body)
-
-		lock.Lock()
 		receivedRequests = append(receivedRequests, string(jsonPayload))
-		lock.Unlock()
+		a.NoError(err)
 
 		// write the canned response - same for both batches
 		responseBytes, err := json.Marshal(cannedResponse)
@@ -210,6 +211,149 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	a.Equal(2, response.PartsSent)
 	a.Equal(2, response.PartsTotal)
 	a.Equal(5, response.UpsertsSent)
+	a.Equal(5, response.UpsertsTotal)
+	a.Equal(0, response.DeletesSent)
+	a.Equal(0, response.DeletesTotal)
+	a.Equal(cannedResponse.GUID, response.BatchGUID)
+
+	a.Equal(expectedRequests[0], receivedRequests[0])
+	a.Equal(expectedRequests[1], receivedRequests[1])
+}
+
+// Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts - partial success
+func TestMultiPartBatch_PartialSuccess(t *testing.T) {
+	a := assert.New(t)
+
+	serviceCalled := false
+
+	// same response both times
+	cannedResponse := &APIServerResponse{
+		GUID:    "c8285742-f7a4-4870-933d-665b15c31eda",
+		Message: "success",
+		Error:   "",
+	}
+
+	// expecting 2 requests
+	expectedRequests := []string{
+		// first request has no GUID, and has complete=false
+		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+
+		// second request has the GUID, and has complete=true
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]},{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+	}
+
+	lock := sync.Mutex{}
+	receivedRequests := make([]string, 0)
+	requestCount := 0
+
+	// setup test server
+	mux := http.NewServeMux()
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	mux.HandleFunc("/kentik/server/url", func(w http.ResponseWriter, r *http.Request) {
+		lock.Lock()
+		defer lock.Unlock()
+
+		t.Helper()
+		serviceCalled = true
+
+		// keep track of the requests received
+		jsonPayload, err := ioutil.ReadAll(r.Body)
+		receivedRequests = append(receivedRequests, string(jsonPayload))
+		a.NoError(err)
+		requestCount++
+
+		// first request is success, second is failure
+		if requestCount == 1 {
+			// write the canned response - same for both batches
+			responseBytes, err := json.Marshal(cannedResponse)
+			a.NoError(err)
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(200)
+			w.Write(responseBytes)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(500)
+			w.Write([]byte("server error occurred"))
+		}
+	})
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+
+	// force the client to use small batches - request as one part is 546 bytes - make the batch size 300
+	sut.OutgoingRequestSize = 300
+
+	// build the request
+	batch := TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test2",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"2.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test3",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"3.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test4",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"4.2.3.4"},
+					},
+				},
+			},
+			{
+				Value: "test5",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"5.2.3.4"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 0,
+	}
+
+	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
+	response, err := sut.SendBatch(url, &batch)
+	a.Error(err)
+	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1/2 parts, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
+	a.Equal(expectedErrorStr, err.Error())
+	a.NotNil(response)
+
+	// make sure the fake web service was hit
+	a.True(serviceCalled)
+	a.Equal(2, len(receivedRequests))
+
+	// verify the response
+	a.Equal(1, response.PartsSent)
+	a.Equal(2, response.PartsTotal)
+	a.Equal(2, response.UpsertsSent)
 	a.Equal(5, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
 	a.Equal(0, response.DeletesTotal)
