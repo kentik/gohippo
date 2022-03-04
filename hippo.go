@@ -235,31 +235,31 @@ func (c *Client) split(rFull *TagBatchPart) ([]TagBatchPart, error) {
 		return []TagBatchPart{*rFull}, nil
 	}
 
-	// Here, have to split this request into a group
-	parts := (len(serializedBytes) / outgoingRequestSize) + 1
-	upsertPerPart := len(rFull.Upserts) / parts
-	ret := make([]TagBatchPart, parts)
-	lastUp := 0
-
-	for i := 0; i < parts-1; i++ {
-		ret[i] = TagBatchPart{
-			ReplaceAll: rFull.ReplaceAll,
-			IsComplete: false,
-			TTLMinutes: rFull.TTLMinutes,
-			Upserts:    rFull.Upserts[lastUp : lastUp+upsertPerPart],
-			Sender:     rFull.Sender,
-		}
-
-		lastUp += upsertPerPart
+	parts := len(serializedBytes)/outgoingRequestSize + 1
+	upsertsPerPart := len(rFull.Upserts) / parts
+	if upsertsPerPart == 0 {
+		// this happens if we have huge upserts compared to batch size, resulting in
+		// more desired parts than upserts. We can't split upserts, so limit 1 upsert per part
+		upsertsPerPart = 1
 	}
 
-	// Last one has to be handled separately
-	ret[parts-1] = TagBatchPart{
-		ReplaceAll: rFull.ReplaceAll,
-		IsComplete: true,
-		TTLMinutes: rFull.TTLMinutes,
-		Upserts:    rFull.Upserts[lastUp:],
-		Sender:     rFull.Sender,
+	ret := make([]TagBatchPart, 0)
+	startIndex := 0
+	for startIndex < len(rFull.Upserts) {
+		endRange := startIndex + upsertsPerPart
+		if endRange > len(rFull.Upserts) {
+			endRange = len(rFull.Upserts)
+		}
+
+		ret = append(ret, TagBatchPart{
+			ReplaceAll: rFull.ReplaceAll,
+			IsComplete: endRange == len(rFull.Upserts),
+			TTLMinutes: rFull.TTLMinutes,
+			Upserts:    rFull.Upserts[startIndex:endRange],
+			Sender:     rFull.Sender,
+		})
+
+		startIndex += upsertsPerPart
 	}
 
 	return ret, nil
