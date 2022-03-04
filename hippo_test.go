@@ -258,13 +258,16 @@ func TestMultiPartBatch_Success(t *testing.T) {
 		Error:   "",
 	}
 
-	// expecting 2 requests
+	// expecting 3 requests
 	expectedRequests := []string{
 		// first request has no GUID, and has complete=false
 		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
 
-		// second request has the GUID, and has complete=true
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]},{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		// second request has the GUID, and has complete=false
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":false,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+
+		// third request has the GUID, and complete=true
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
 	}
 
 	lock := sync.Mutex{}
@@ -362,19 +365,20 @@ func TestMultiPartBatch_Success(t *testing.T) {
 
 	// make sure the fake web service was hit
 	a.True(serviceCalled)
-	a.Equal(2, len(receivedRequests))
 
 	// verify the response
-	a.Equal(2, response.PartsSent)
-	a.Equal(2, response.PartsTotal)
+	a.Equal(3, response.PartsSent)
+	a.Equal(3, response.PartsTotal)
 	a.Equal(5, response.UpsertsSent)
 	a.Equal(5, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
 	a.Equal(0, response.DeletesTotal)
 	a.Equal(cannedResponse.GUID, response.BatchGUID)
 
+	a.Equal(len(expectedRequests), len(receivedRequests))
 	a.Equal(expectedRequests[0], receivedRequests[0])
 	a.Equal(expectedRequests[1], receivedRequests[1])
+	a.Equal(expectedRequests[2], receivedRequests[2])
 }
 
 // Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts - partial success
@@ -395,8 +399,8 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 		// first request has no GUID, and has complete=false
 		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
 
-		// second request has the GUID, and has complete=true
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]},{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		// second request has the GUID, and also has complete=false, since there should be 3 parts, but we only send 2
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":false,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
 	}
 
 	lock := sync.Mutex{}
@@ -499,23 +503,23 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
 	response, err := sut.SendBatch(context.Background(), url, &batch)
 	a.Error(err)
-	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1/2 parts, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
+	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1/3 parts, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
 	a.Equal(expectedErrorStr, err.Error())
 	a.NotNil(response)
 
 	// make sure the fake web service was hit
 	a.True(serviceCalled)
-	a.Equal(2, len(receivedRequests))
 
 	// verify the response
 	a.Equal(1, response.PartsSent)
-	a.Equal(2, response.PartsTotal)
+	a.Equal(3, response.PartsTotal)
 	a.Equal(2, response.UpsertsSent)
 	a.Equal(5, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
 	a.Equal(0, response.DeletesTotal)
 	a.Equal(cannedResponse.GUID, response.BatchGUID)
 
+	a.Equal(2, len(receivedRequests)) // wanted 3, but only got 2
 	a.Equal(expectedRequests[0], receivedRequests[0])
 	a.Equal(expectedRequests[1], receivedRequests[1])
 }
