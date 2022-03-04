@@ -643,7 +643,8 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 	require.Equal(string(expect), string(actual))
 }
 
-// test splitting a batch that results in more parts than we have upserts
+// test splitting a batch with big enough upserts and small enough of a batch that initially, we to create
+// more batch parts than we have upserts. We then create one batch part per upsert.
 func TestSplitHugeUpserts(t *testing.T) {
 	r := require.New(t)
 
