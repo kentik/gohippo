@@ -648,7 +648,7 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 func TestSplitHugeUpserts(t *testing.T) {
 	r := require.New(t)
 
-	// batch with 5 criteria, each with 15,000 IPs
+	// batch with 5 upserts, each with 15,000 IPs
 	addressesPerUpsert := 15000
 
 	ips := buildIPAddresses(addressesPerUpsert)
