@@ -722,11 +722,7 @@ func TestSplitHugeUpserts(t *testing.T) {
 		r.Equal(1, len(parts[i].Upserts))
 		r.Equal(1, len(parts[i].Upserts[0].Criteria))
 		r.Equal(addressesPerUpsert, len(parts[i].Upserts[0].Criteria[0].IPAddresses))
-
-		// verify we're sorted by value
-		r.Equal(fmt.Sprintf("test%d", i+1), parts[i].Upserts[0].Value)
 	}
-
 }
 
 // build a list of IP addresses
