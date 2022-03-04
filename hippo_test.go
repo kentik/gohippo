@@ -638,3 +638,106 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 
 	require.Equal(string(expect), string(actual))
 }
+
+// test splitting a batch that results in more parts than we have upserts
+func TestSplitHugeUpserts(t *testing.T) {
+	r := require.New(t)
+
+	// batch with 5 criteria, each with 15,000 IPs
+	addressesPerUpsert := 15000
+
+	ips := buildIPAddresses(addressesPerUpsert)
+	batch := &TagBatchPart{
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			{
+				Value: "test1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						PortRanges:  []string{"1-2"},
+						IPAddresses: ips,
+					},
+				},
+			},
+			{
+				Value: "test2",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						PortRanges:  []string{"3-4"},
+						IPAddresses: ips,
+					},
+				},
+			},
+			{
+				Value: "test3",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						PortRanges:  []string{"5-6"},
+						IPAddresses: ips,
+					},
+				},
+			},
+			{
+				Value: "test4",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						PortRanges:  []string{"7-8"},
+						IPAddresses: ips,
+					},
+				},
+			},
+			{
+				Value: "test5",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						PortRanges:  []string{"9-10"},
+						IPAddresses: ips,
+					},
+				},
+			},
+		},
+		TTLMinutes: 0,
+	}
+
+	sut := NewHippo("agent", "email", "token")
+	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
+	sut.OutgoingRequestSize = 100000 // batch size chosen to want more parts (10) than upserts (5)
+	parts, err := sut.split(batch)
+	r.NoError(err)
+
+	// verify 5 parts, each with one upsert
+	r.Equal(5, len(parts))
+	for i := 0; i < 5; i++ {
+		r.Equal(1, len(parts[i].Upserts))
+		r.Equal(1, len(parts[i].Upserts[0].Criteria))
+		r.Equal(addressesPerUpsert, len(parts[i].Upserts[0].Criteria[0].IPAddresses))
+
+		// verify we're sorted by value
+		r.Equal(fmt.Sprintf("test%d", i+1), parts[i].Upserts[0].Value)
+	}
+
+}
+
+// build a list of IP addresses
+func buildIPAddresses(count int) []string {
+	ret := make([]string, 0, count)
+	for a := 1; a < 255; a++ {
+		for b := 1; b < 255; b++ {
+			for c := 1; c < 255; c++ {
+				for d := 1; d < 255; d++ {
+					ret = append(ret, fmt.Sprintf("%d.%d.%d.%d", a, b, c, d))
+					if len(ret) >= count {
+						return ret
+					}
+				}
+			}
+		}
+	}
+	return ret
+}
