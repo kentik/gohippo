@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test sending a small batch through a fake server - not so concerned here with the structure of upserts
+// Test sending a small batch through a fake server
 func TestSinglePartBatch_Success(t *testing.T) {
 	a := require.New(t)
 
@@ -37,7 +37,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 		jsonPayload, err := ioutil.ReadAll(r.Body)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -80,13 +80,11 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 	// verify the response
 	a.Equal(1, response.PartsSent)
-	a.Equal(1, response.PartsTotal)
 	a.Equal(1, response.UpsertsSent)
 	a.Equal(1, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
 	a.Equal(0, response.DeletesTotal)
 	a.Equal(cannedResponse.GUID, response.BatchGUID)
-
 }
 
 // Test sending a small batch through a fake server - not so concerned here with the structure of upserts
@@ -113,7 +111,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 		jsonPayload, err := ioutil.ReadAll(r.Body)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -149,7 +147,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
 	response, err := sut.SendBatch(context.Background(), url, &batch)
 	a.Error(err)
-	expectedError := `API response contained an error - [Batch GUID: ; Progress: 0/1 parts, 0/1 upserts, 0/0 deletes] - server message: ; server error: Internal error processing request - please re-submit this batch part, or the entire batch`
+	expectedError := `API response contained an error - [Batch GUID: ; Progress: 0 parts sent, 0/1 upserts, 0/0 deletes] - server message: ; server error: Internal error processing request - please re-submit this batch part, or the entire batch`
 	a.Equal(expectedError, err.Error())
 
 	a.NotNil(response)
@@ -159,7 +157,6 @@ func TestSinglePartBatch_Error(t *testing.T) {
 
 	// verify the response
 	a.Equal(0, response.PartsSent)
-	a.Equal(1, response.PartsTotal)
 	a.Equal(0, response.UpsertsSent)
 	a.Equal(1, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
@@ -191,7 +188,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 		jsonPayload, err := ioutil.ReadAll(r.Body)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"complete":true,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -227,7 +224,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
 	response, err := sut.SendBatch(context.Background(), url, &batch)
 	a.Error(err)
-	expectedError := `API response did not include a GUID for subsequent batches - [Batch GUID: ; Progress: 0/1 parts, 0/1 upserts, 0/0 deletes] - server message: ; server error: `
+	expectedError := `API response did not include a GUID for subsequent batches - [Batch GUID: ; Progress: 0 parts sent, 0/1 upserts, 0/0 deletes] - server message: ; server error: `
 	a.Equal(expectedError, err.Error())
 
 	a.NotNil(response)
@@ -237,7 +234,6 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 
 	// verify the response
 	a.Equal(0, response.PartsSent)
-	a.Equal(1, response.PartsTotal)
 	a.Equal(0, response.UpsertsSent)
 	a.Equal(1, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
@@ -261,13 +257,13 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	// expecting 3 requests
 	expectedRequests := []string{
 		// first request has no GUID, and has complete=false
-		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"complete":false}`,
 
 		// second request has the GUID, and has complete=false
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":false,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"complete":false}`,
 
 		// third request has the GUID, and complete=true
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":true,"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`,
 	}
 
 	lock := sync.Mutex{}
@@ -301,8 +297,8 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	sut := NewHippo("agent", "email", "token")
 	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
 
-	// force the client to use small batches - request as one part is 546 bytes - make the batch size 300
-	sut.OutgoingRequestSize = 300
+	// force the client to use small batches
+	sut.OutgoingRequestSize = 380
 
 	// build the request
 	batch := TagBatchPart{
@@ -368,7 +364,6 @@ func TestMultiPartBatch_Success(t *testing.T) {
 
 	// verify the response
 	a.Equal(3, response.PartsSent)
-	a.Equal(3, response.PartsTotal)
 	a.Equal(5, response.UpsertsSent)
 	a.Equal(5, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
@@ -379,6 +374,21 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	a.Equal(expectedRequests[0], receivedRequests[0])
 	a.Equal(expectedRequests[1], receivedRequests[1])
 	a.Equal(expectedRequests[2], receivedRequests[2])
+
+	// make sure all the upserts are found
+	foundValues := make(map[string]bool)
+	for i := 0; i < 3; i++ {
+		batch := TagBatchPart{}
+		a.NoError(json.Unmarshal([]byte(receivedRequests[i]), &batch))
+		for _, upsert := range batch.Upserts {
+			a.False(foundValues[upsert.Value])
+			foundValues[upsert.Value] = true
+		}
+	}
+	a.Equal(5, len(foundValues))
+	for i := 1; i <= 5; i++ {
+		a.True(foundValues[fmt.Sprintf("test%d", i)])
+	}
 }
 
 // Test sending a multiple-batch through a fake server - not so concerned here with the structure of upserts - partial success
@@ -397,10 +407,10 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	// expecting 2 requests
 	expectedRequests := []string{
 		// first request has no GUID, and has complete=false
-		`{"guid":"","replace_all":true,"complete":false,"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"complete":false}`,
 
 		// second request has the GUID, and also has complete=false, since there should be 3 parts, but we only send 2
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"complete":false,"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"deletes":null,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"}}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"complete":false}`,
 	}
 
 	lock := sync.Mutex{}
@@ -443,8 +453,8 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	sut := NewHippo("agent", "email", "token")
 	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
 
-	// force the client to use small batches - request as one part is 546 bytes - make the batch size 300
-	sut.OutgoingRequestSize = 300
+	// force the client to use small batches
+	sut.OutgoingRequestSize = 380
 
 	// build the request
 	batch := TagBatchPart{
@@ -503,7 +513,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
 	response, err := sut.SendBatch(context.Background(), url, &batch)
 	a.Error(err)
-	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1/3 parts, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
+	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1 parts sent, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
 	a.Equal(expectedErrorStr, err.Error())
 	a.NotNil(response)
 
@@ -512,7 +522,6 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 
 	// verify the response
 	a.Equal(1, response.PartsSent)
-	a.Equal(3, response.PartsTotal)
 	a.Equal(2, response.UpsertsSent)
 	a.Equal(5, response.UpsertsTotal)
 	a.Equal(0, response.DeletesSent)
@@ -641,88 +650,6 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 	require.NoError(err)
 
 	require.Equal(string(expect), string(actual))
-}
-
-// test splitting a batch with big enough upserts and small enough of a batch that initially, we to create
-// more batch parts than we have upserts. We then create one batch part per upsert.
-func TestSplitHugeUpserts(t *testing.T) {
-	r := require.New(t)
-
-	// batch with 5 upserts, each with 15,000 IPs
-	addressesPerUpsert := 15000
-
-	ips := buildIPAddresses(addressesPerUpsert)
-	batch := &TagBatchPart{
-		ReplaceAll: true,
-		IsComplete: true,
-		Upserts: []TagUpsert{
-			{
-				Value: "test1",
-				Criteria: []TagCriteria{
-					{
-						Direction:   "asc",
-						PortRanges:  []string{"1-2"},
-						IPAddresses: ips,
-					},
-				},
-			},
-			{
-				Value: "test2",
-				Criteria: []TagCriteria{
-					{
-						Direction:   "asc",
-						PortRanges:  []string{"3-4"},
-						IPAddresses: ips,
-					},
-				},
-			},
-			{
-				Value: "test3",
-				Criteria: []TagCriteria{
-					{
-						Direction:   "asc",
-						PortRanges:  []string{"5-6"},
-						IPAddresses: ips,
-					},
-				},
-			},
-			{
-				Value: "test4",
-				Criteria: []TagCriteria{
-					{
-						Direction:   "asc",
-						PortRanges:  []string{"7-8"},
-						IPAddresses: ips,
-					},
-				},
-			},
-			{
-				Value: "test5",
-				Criteria: []TagCriteria{
-					{
-						Direction:   "asc",
-						PortRanges:  []string{"9-10"},
-						IPAddresses: ips,
-					},
-				},
-			},
-		},
-		TTLMinutes: 0,
-	}
-
-	sut := NewHippo("agent", "email", "token")
-	sut.SetSenderInfo("my-service", "service-instance-1", "my-host-name")
-	sut.OutgoingRequestSize = 100000 // batch size chosen to want more parts (10) than upserts (5)
-	parts, err := sut.split(batch)
-	r.NoError(err)
-
-	// verify 5 parts, each with one upsert
-	r.Equal(5, len(parts))
-	for i := 0; i < 5; i++ {
-		r.Equal(1, len(parts[i].Upserts))
-		r.Equal(1, len(parts[i].Upserts[0].Criteria))
-		r.Equal(addressesPerUpsert, len(parts[i].Upserts[0].Criteria[0].IPAddresses))
-	}
 }
 
 // build a list of IP addresses

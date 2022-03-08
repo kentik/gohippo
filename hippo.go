@@ -17,7 +17,6 @@ import (
 
 type SendBatchResult struct {
 	PartsSent    int
-	PartsTotal   int
 	UpsertsSent  int
 	UpsertsTotal int
 	DeletesSent  int
@@ -26,7 +25,7 @@ type SendBatchResult struct {
 }
 
 func (r *SendBatchResult) String() string {
-	return fmt.Sprintf("Batch GUID: %s; Progress: %d/%d parts, %d/%d upserts, %d/%d deletes", r.BatchGUID, r.PartsSent, r.PartsTotal, r.UpsertsSent, r.UpsertsTotal, r.DeletesSent, r.DeletesTotal)
+	return fmt.Sprintf("Batch GUID: %s; Progress: %d parts sent, %d/%d upserts, %d/%d deletes", r.BatchGUID, r.PartsSent, r.UpsertsSent, r.UpsertsTotal, r.DeletesSent, r.DeletesTotal)
 }
 
 const (
@@ -42,7 +41,7 @@ type Client struct {
 	UsrToken            string
 	OutgoingRequestSize int
 
-	Sender TagBatchPartSender // optional - to help track batch origin
+	sender TagBatchPartSender // optional - to help track batch origin
 	lock   sync.RWMutex
 }
 
@@ -97,7 +96,7 @@ func (c *Client) SetSenderInfo(serviceName string, serviceInstance string, hostN
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	c.Sender = TagBatchPartSender{
+	c.sender = TagBatchPartSender{
 		ServiceName:     serviceName,
 		ServiceInstance: serviceInstance,
 		HostName:        hostName,
@@ -144,35 +143,41 @@ func (c *Client) Do(ctx context.Context, req *http.Request) ([]byte, error) {
 }
 
 // SendBatch sends a batch to the server, in multiple requests, if necessary.
+// - does not currently support Deletes
 // - may return non-nil SendBatchResult on error, it'll report how far we got
 // - error will contain SendBatchResult info
 func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart) (*SendBatchResult, error) {
 	c.lock.RLock()
-	sender := c.Sender
+	sender := c.sender
 	c.lock.RUnlock()
 
 	// compact the batch, grouping the same values together
 	batch = compactTagBatchPart(*batch)
-	batch.Sender = sender
 
-	batchParts, err := c.split(batch)
-	if err != nil {
-		return nil, err
+	batchBuilder := NewBatchBuilder(c.OutgoingRequestSize, batch.ReplaceAll, batch.TTLMinutes)
+	batchBuilder.SetSenderInfo(sender)
+
+	for i := range batch.Upserts {
+		upsert := batch.Upserts[i]
+		if err := batchBuilder.AddUpsert(&upsert); err != nil {
+			return nil, fmt.Errorf("Error adding upsert: %s", err)
+		}
 	}
 
 	ret := &SendBatchResult{
-		PartsTotal:   len(batchParts),
 		UpsertsTotal: len(batch.Upserts),
 		DeletesTotal: len(batch.Deletes),
 		BatchGUID:    "", // not known until we send the first part
 	}
-
-	for i, batchPart := range batchParts {
-		batchPart.BatchGUID = ret.BatchGUID
-
-		requestBytes, err := json.Marshal(batchPart)
+	for {
+		batchBuilder.SetBatchGUID(ret.BatchGUID)
+		requestBytes, upsertCount, err := batchBuilder.BuildBatch()
 		if err != nil {
-			return ret, fmt.Errorf("Error JSON marshalling request batch - [%s] - underlying error: %s", ret, err)
+			return ret, fmt.Errorf("Error building batch: %s", err)
+		}
+		if requestBytes == nil {
+			// sent the last batch
+			break
 		}
 
 		req, err := c.NewTagBatchPartRequest("POST", url, requestBytes)
@@ -184,7 +189,7 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 			return ret, fmt.Errorf("Error POSTing populators to %s - [%s] - underlying error: %s", url, ret, err)
 		}
 
-		if i == 0 {
+		if ret.PartsSent == 0 {
 			// first response returns the batch GUID, which we need to include in subsequent batches
 			apiResponse := APIServerResponse{}
 			if err := json.Unmarshal(responseBytes, &apiResponse); err != nil {
@@ -201,65 +206,11 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 
 		// update response
 		ret.PartsSent++
-		ret.UpsertsSent += len(batchPart.Upserts)
-		ret.DeletesSent += len(batchPart.Deletes)
+		ret.UpsertsSent += upsertCount
+		ret.DeletesSent += 0 // TODO: add support to this at some point
 
 		// slow down the HTTP batches a bit to avoid rate limiting
 		time.Sleep(time.Second)
-	}
-
-	return ret, nil
-}
-
-// split a batch into parts small enough for sending through Kentik API
-func (c *Client) split(rFull *TagBatchPart) ([]TagBatchPart, error) {
-	encode := func(r *TagBatchPart) ([]byte, error) {
-		if b, err := json.Marshal(r); err != nil {
-			return nil, fmt.Errorf("Error JSON-marshalling batch: %s", err)
-		} else {
-			return b, nil
-		}
-	}
-
-	serializedBytes, err := encode(rFull)
-	if err != nil {
-		return nil, err
-	}
-
-	outgoingRequestSize := c.OutgoingRequestSize
-	if outgoingRequestSize <= 0 {
-		outgoingRequestSize = DEFAULT_MAX_HIPPO_SIZE
-	}
-
-	if len(serializedBytes) < outgoingRequestSize {
-		return []TagBatchPart{*rFull}, nil
-	}
-
-	parts := len(serializedBytes)/outgoingRequestSize + 1
-	upsertsPerPart := len(rFull.Upserts) / parts
-	if upsertsPerPart == 0 {
-		// this happens if we have huge upserts compared to batch size, resulting in
-		// more desired parts than upserts. We can't split upserts, so limit 1 upsert per part
-		upsertsPerPart = 1
-	}
-
-	ret := make([]TagBatchPart, 0)
-	startIndex := 0
-	for startIndex < len(rFull.Upserts) {
-		endRange := startIndex + upsertsPerPart
-		if endRange > len(rFull.Upserts) {
-			endRange = len(rFull.Upserts)
-		}
-
-		ret = append(ret, TagBatchPart{
-			ReplaceAll: rFull.ReplaceAll,
-			IsComplete: endRange == len(rFull.Upserts),
-			TTLMinutes: rFull.TTLMinutes,
-			Upserts:    rFull.Upserts[startIndex:endRange],
-			Sender:     rFull.Sender,
-		})
-
-		startIndex += upsertsPerPart
 	}
 
 	return ret, nil

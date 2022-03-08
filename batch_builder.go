@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 )
 
 // BatchBuilder is responsible for building a batch that will serialize within a desired size if possible.
@@ -16,13 +15,14 @@ type BatchBuilder struct {
 	serializedUpserts [][]byte
 	batchGUID         string
 	replaceAll        bool
-	ttlMinutes        int
+	ttlMinutes        uint32
 	builtBatchesCount int
 	hasClosedBatch    bool
+	sender            TagBatchPartSender // optional - to help track batch origin
 }
 
 // NewBatchBuilder builds a new BatchBuilder
-func NewBatchBuilder(desiredSize int, replaceAll bool, ttlMinutes int) *BatchBuilder {
+func NewBatchBuilder(desiredSize int, replaceAll bool, ttlMinutes uint32) *BatchBuilder {
 	return &BatchBuilder{
 		desiredSize:       desiredSize,
 		serializedUpserts: make([][]byte, 0),
@@ -33,7 +33,7 @@ func NewBatchBuilder(desiredSize int, replaceAll bool, ttlMinutes int) *BatchBui
 }
 
 // Reset resets the batch builder to build a new batch, reusing the underlying buffer.
-func (b *BatchBuilder) Reset(desiredSize int, replaceAll bool, ttlMinutes int) {
+func (b *BatchBuilder) Reset(desiredSize int, replaceAll bool, ttlMinutes uint32) {
 	b.desiredSize = desiredSize
 	b.serializedUpserts = b.serializedUpserts[:0]
 	b.batchGUID = ""
@@ -41,6 +41,15 @@ func (b *BatchBuilder) Reset(desiredSize int, replaceAll bool, ttlMinutes int) {
 	b.ttlMinutes = ttlMinutes
 	b.builtBatchesCount = 0
 	b.hasClosedBatch = false
+}
+
+// SetSenderInfo sets optional metadata about the service sending batches
+func (b *BatchBuilder) SetSenderInfo(sender TagBatchPartSender) {
+	b.sender = sender
+}
+
+func (b *BatchBuilder) isSenderInfoSet() bool {
+	return b.sender.ServiceName != "" || b.sender.ServiceInstance != "" || b.sender.HostName != ""
 }
 
 // AddUpsert attempts to add the input upsert into the batch.
@@ -61,14 +70,15 @@ func (b *BatchBuilder) SetBatchGUID(guid string) {
 
 // BuildBatch builds and returns a serialized batch.
 // Once this method is called, don't make any further calls to AddUpsert.
-func (b *BatchBuilder) BuildBatch() ([]byte, error) {
+// - returns serialized batch and upsert count
+func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 	if len(b.serializedUpserts) == 0 && b.hasClosedBatch {
 		// nothing to do
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	if b.batchGUID == "" && b.builtBatchesCount > 0 {
-		return nil, fmt.Errorf("Only first batch may be sent without batch GUID")
+		return nil, 0, fmt.Errorf("Only first batch may be sent without batch GUID")
 	}
 
 	b.buf.Reset()
@@ -86,31 +96,46 @@ func (b *BatchBuilder) BuildBatch() ([]byte, error) {
 
 	// guid
 	if _, err := b.buf.WriteString(`{"guid":"`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 	if _, err := b.buf.WriteString(b.batchGUID); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 
 	// replace_all
 	if _, err := b.buf.WriteString(`","replace_all":`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 	if _, err := b.buf.WriteString(boolString(b.replaceAll)); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 
 	// ttl_minutes
 	if _, err := b.buf.WriteString(`,"ttl_minutes":`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
-	if _, err := b.buf.WriteString(strconv.Itoa(b.ttlMinutes)); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+	if _, err := b.buf.WriteString(fmt.Sprintf("%d", b.ttlMinutes)); err != nil {
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
+	}
+
+	// service info, if set
+	if b.isSenderInfoSet() {
+		senderBytes, err := json.Marshal(b.sender)
+		if err != nil {
+			return nil, 0, fmt.Errorf("Error marshalling sender info to JSON: %s", err)
+		}
+
+		if _, err := b.buf.WriteString(`,"sender":`); err != nil {
+			return nil, 0, fmt.Errorf("Error writing sender info to buffer: %s", err)
+		}
+		if _, err := b.buf.Write(senderBytes); err != nil {
+			return nil, 0, fmt.Errorf("Error writing sender info to buffer: %s", err)
+		}
 	}
 
 	// upserts start
 	if _, err := b.buf.WriteString(`,"upserts":[`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 
 	// build a batch as big as we can
@@ -130,12 +155,12 @@ func (b *BatchBuilder) BuildBatch() ([]byte, error) {
 		if len(b.serializedUpserts[end]) <= availableSpace {
 			if upsertCount > 0 {
 				if _, err := b.buf.WriteString(","); err != nil {
-					return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+					return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 				}
 				availableSpace--
 			}
 			if _, err := b.buf.Write(b.serializedUpserts[end]); err != nil {
-				return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+				return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 			}
 			availableSpace -= len(b.serializedUpserts[end])
 
@@ -150,12 +175,12 @@ func (b *BatchBuilder) BuildBatch() ([]byte, error) {
 		if len(b.serializedUpserts[start]) <= availableSpace {
 			if upsertCount > 0 {
 				if _, err := b.buf.WriteString(","); err != nil {
-					return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+					return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 				}
 				availableSpace--
 			}
 			if _, err := b.buf.Write(b.serializedUpserts[start]); err != nil {
-				return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+				return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 			}
 			availableSpace -= len(b.serializedUpserts[start])
 
@@ -170,29 +195,29 @@ func (b *BatchBuilder) BuildBatch() ([]byte, error) {
 	}
 
 	if upsertCount == 0 {
-		return nil, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
+		return nil, 0, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
 	}
 	if _, err := b.buf.WriteString(`]`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 
 	// is_complete
 	if _, err := b.buf.WriteString(`,"complete":`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 	if _, err := b.buf.WriteString(boolString(start > end)); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 	b.hasClosedBatch = start > end
 
 	if _, err := b.buf.WriteString(`}`); err != nil {
-		return nil, fmt.Errorf("Error writing string to buffer: %s", err)
+		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
 
 	b.serializedUpserts = b.serializedUpserts[start : end+1]
 
 	b.builtBatchesCount++
-	return b.buf.Bytes(), nil
+	return b.buf.Bytes(), upsertCount, nil
 }
 
 func boolString(val bool) string {

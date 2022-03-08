@@ -30,10 +30,241 @@ func TestBatchBuilder_FailureImpossible(t *testing.T) {
 		}))
 	}
 
-	batchBytes, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatch()
 	a.Nil(batchBytes)
 	a.Error(err)
 	a.Equal("Have 10 remaining upserts, but could not fit any into the batch. The smallest one is 11630 bytes", err.Error())
+	a.Zero(upsertCount)
+}
+
+// Test building a batch that fits in one part
+func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
+	a := require.New(t)
+
+	sut := NewBatchBuilder(3000000, true, 17)
+	sut.SetSenderInfo(TagBatchPartSender{
+		ServiceName:     "service-name",
+		ServiceInstance: "service-instance",
+		HostName:        "host-name",
+	})
+
+	// build a name for an upsert by index where the earlier indexes names are longer, so we can predict the order in the output
+	nameFor := func(index int) string {
+		ret := "value"
+		for i := 1; i <= index; i++ {
+			ret += "_A"
+		}
+		return ret + fmt.Sprintf("_%d", index)
+	}
+
+	for i := 1; i <= 5; i++ {
+		upsert := TagUpsert{
+			Value: nameFor(i),
+			Criteria: []TagCriteria{
+				{
+					Direction:   "asc",
+					IPAddresses: []string{fmt.Sprintf("1.2.3.%d", i)},
+				},
+			},
+		}
+		a.NoError(sut.AddUpsert(&upsert))
+	}
+
+	// build the batch - make sure EVERYTHING is as we expect
+	batchBytes, upsertCount, err := sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(5, upsertCount)
+	a.Equal(568, len(batchBytes))
+
+	expectedBatch := TagBatchPart{
+		BatchGUID:  "",
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			TagUpsert{
+				Value: "value_A_A_A_A_A_5",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.5"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_A_A_A_4",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_A_A_3",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.3"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_A_2",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.2"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.1"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 17,
+		Sender: TagBatchPartSender{
+			ServiceName:     "service-name",
+			ServiceInstance: "service-instance",
+			HostName:        "host-name",
+		},
+	}
+
+	receivedBatch := TagBatchPart{}
+	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
+
+	a.True(expectedBatch.Equal(receivedBatch))
+}
+
+// Test building a batch that fits in 2 parts, with sender info
+func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
+	a := require.New(t)
+
+	// single batch fits in 568 bytes - force 2 batches by setting max size to 500
+	sut := NewBatchBuilder(500, true, 17)
+	sut.SetSenderInfo(TagBatchPartSender{
+		ServiceName:     "service-name",
+		ServiceInstance: "service-instance",
+		HostName:        "host-name",
+	})
+
+	// build a name for an upsert by index where the earlier indexes names are longer, so we can predict the order in the output
+	nameFor := func(index int) string {
+		ret := "value"
+		for i := 1; i <= index; i++ {
+			ret += "_A"
+		}
+		return ret + fmt.Sprintf("_%d", index)
+	}
+
+	for i := 1; i <= 5; i++ {
+		upsert := TagUpsert{
+			Value: nameFor(i),
+			Criteria: []TagCriteria{
+				{
+					Direction:   "asc",
+					IPAddresses: []string{fmt.Sprintf("1.2.3.%d", i)},
+				},
+			},
+		}
+		a.NoError(sut.AddUpsert(&upsert))
+	}
+
+	// build the batches - make sure EVERYTHING is as we expect - two batches, 3 upserts in the first, 2 in the second
+
+	// batch 1: 3 upserts
+	batchBytes, upsertCount, err := sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(3, upsertCount)
+	expectedBatch := TagBatchPart{
+		BatchGUID:  "",
+		ReplaceAll: true,
+		IsComplete: false,
+		Upserts: []TagUpsert{
+			TagUpsert{
+				Value: "value_A_A_A_A_A_5",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.5"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_A_A_A_4",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.4"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_A_A_3",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.3"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 17,
+		Sender: TagBatchPartSender{
+			ServiceName:     "service-name",
+			ServiceInstance: "service-instance",
+			HostName:        "host-name",
+		},
+	}
+	receivedBatch := TagBatchPart{}
+	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
+	a.True(expectedBatch.Equal(receivedBatch))
+
+	// batch 2: 2 upserts
+	sut.SetBatchGUID("805e4dcb-3ecd-24f3-3a35-3e926e4bded5")
+	batchBytes, upsertCount, err = sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(2, upsertCount)
+	expectedBatch = TagBatchPart{
+		BatchGUID:  "805e4dcb-3ecd-24f3-3a35-3e926e4bded5",
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts: []TagUpsert{
+			TagUpsert{
+				Value: "value_A_A_2",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.2"},
+					},
+				},
+			},
+			TagUpsert{
+				Value: "value_A_1",
+				Criteria: []TagCriteria{
+					{
+						Direction:   "asc",
+						IPAddresses: []string{"1.2.3.1"},
+					},
+				},
+			},
+		},
+		TTLMinutes: 17,
+		Sender: TagBatchPartSender{
+			ServiceName:     "service-name",
+			ServiceInstance: "service-instance",
+			HostName:        "host-name",
+		},
+	}
+	receivedBatch = TagBatchPart{}
+	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
+	a.True(expectedBatch.Equal(receivedBatch))
+
 }
 
 // test building a batch from big and small upserts
@@ -90,11 +321,12 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		}
 
 		verifyBatch := func(bigCount int, smallCount int, guid string, batchSizeBytes int, isComplete bool, ttlMinutes uint32) {
-			batchBytes, err := sut.BuildBatch()
+			batchBytes, upsertCount, err := sut.BuildBatch()
 			a.NoError(err)
 			a.NotNil(batchBytes)
 			a.Equal(batchSizeBytes, len(batchBytes))
 			a.True(len(batchBytes) <= maxSize)
+			a.Equal(bigCount+smallCount, upsertCount)
 
 			// make sure the batch is proper JSON
 			batch := TagBatchPart{}
@@ -127,10 +359,11 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		verifyBatch(1, 3, "", 12193, false, 13)
 
 		// now try to build a batch without providing GUID, and expect it'll fail
-		batchBytes, err := sut.BuildBatch()
+		batchBytes, upsertCount, err := sut.BuildBatch()
 		a.Nil(batchBytes)
 		a.Error(err)
 		a.Equal("Only first batch may be sent without batch GUID", err.Error())
+		a.Zero(upsertCount)
 
 		// set the GUID and try again
 		sut.SetBatchGUID("705e4dcb-3ecd-24f3-3a35-3e926e4bded5")
@@ -141,9 +374,10 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		verifyBatch(1, 0, "705e4dcb-3ecd-24f3-3a35-3e926e4bded5", 11739, true, 13)
 
 		// make sure that the batch builder knows it's done
-		batchBytes, err = sut.BuildBatch()
+		batchBytes, upsertCount, err = sut.BuildBatch()
 		a.Nil(batchBytes)
 		a.NoError(err)
+		a.Zero(upsertCount)
 	}
 
 	// run the test twice to make sure we can reuse SUT
