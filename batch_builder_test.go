@@ -30,7 +30,7 @@ func TestBatchBuilder_FailureImpossible(t *testing.T) {
 		}))
 	}
 
-	batchBytes, upsertCount, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
 	a.Nil(batchBytes)
 	a.Error(err)
 	a.Equal("Have 10 remaining upserts, but could not fit any into the batch. The smallest one is 11630 bytes", err.Error())
@@ -49,7 +49,7 @@ func TestBatchBuilder_SuccessEmptyReplaceAllBatch(t *testing.T) {
 	})
 
 	// build the batch - make sure EVERYTHING is as we expect
-	batchBytes, upsertCount, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(0, upsertCount)
 	a.NotNil(batchBytes)
@@ -73,7 +73,7 @@ func TestBatchBuilder_SuccessEmptyReplaceAllBatch(t *testing.T) {
 	a.True(expectedBatch.Equal(receivedBatch))
 
 	// try sending it again - should result in no batch, since the replace_all=true batch was just built
-	batchBytes, upsertCount, err = sut.BuildBatch()
+	batchBytes, upsertCount, err = sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(0, upsertCount)
 	a.Nil(batchBytes)
@@ -91,13 +91,13 @@ func TestBatchBuilder_SuccessEmptyNonReplaceAllBatch(t *testing.T) {
 	})
 
 	// attempt to build the batch - should do nothing, since there's no upserts, and this isn't a replace-all batch
-	batchBytes, upsertCount, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Nil(batchBytes)
 	a.Equal(0, upsertCount)
 
 	// try sending it again - should result in no batch again
-	batchBytes, upsertCount, err = sut.BuildBatch()
+	batchBytes, upsertCount, err = sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(0, upsertCount)
 	a.Nil(batchBytes)
@@ -137,7 +137,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 	}
 
 	// build the batch - make sure EVERYTHING is as we expect
-	batchBytes, upsertCount, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(5, upsertCount)
 	a.Equal(568, len(batchBytes))
@@ -244,7 +244,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 	// build the batches - make sure EVERYTHING is as we expect - two batches, 3 upserts in the first, 2 in the second
 
 	// batch 1: 3 upserts
-	batchBytes, upsertCount, err := sut.BuildBatch()
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(3, upsertCount)
 	expectedBatch := TagBatchPart{
@@ -291,9 +291,14 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
 	a.True(expectedBatch.Equal(receivedBatch))
 
+	// verify we can't add more upserts
+	err = sut.AddUpsert(&TagUpsert{Value: "abcdefg12345", Criteria: []TagCriteria{{Direction: "asc", IPAddresses: []string{"1.2.3.4"}}}})
+	a.Error(err)
+	a.Equal("Cannot add upsert after a batch has been built", err.Error())
+
 	// batch 2: 2 upserts
 	sut.SetBatchGUID("805e4dcb-3ecd-24f3-3a35-3e926e4bded5")
-	batchBytes, upsertCount, err = sut.BuildBatch()
+	batchBytes, upsertCount, err = sut.BuildBatchRequest()
 	a.NoError(err)
 	a.Equal(2, upsertCount)
 	expectedBatch = TagBatchPart{
@@ -387,7 +392,7 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		}
 
 		verifyBatch := func(bigCount int, smallCount int, guid string, batchSizeBytes int, isComplete bool, ttlMinutes uint32) {
-			batchBytes, upsertCount, err := sut.BuildBatch()
+			batchBytes, upsertCount, err := sut.BuildBatchRequest()
 			a.NoError(err)
 			a.NotNil(batchBytes)
 			a.Equal(batchSizeBytes, len(batchBytes))
@@ -425,7 +430,7 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		verifyBatch(1, 3, "", 12193, false, 13)
 
 		// now try to build a batch without providing GUID, and expect it'll fail
-		batchBytes, upsertCount, err := sut.BuildBatch()
+		batchBytes, upsertCount, err := sut.BuildBatchRequest()
 		a.Nil(batchBytes)
 		a.Error(err)
 		a.Equal("Only first batch may be sent without batch GUID", err.Error())
@@ -440,7 +445,7 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 		verifyBatch(1, 0, "705e4dcb-3ecd-24f3-3a35-3e926e4bded5", 11739, true, 13)
 
 		// make sure that the batch builder knows it's done
-		batchBytes, upsertCount, err = sut.BuildBatch()
+		batchBytes, upsertCount, err = sut.BuildBatchRequest()
 		a.Nil(batchBytes)
 		a.NoError(err)
 		a.Zero(upsertCount)

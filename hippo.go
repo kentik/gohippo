@@ -171,7 +171,7 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 	}
 	for {
 		batchBuilder.SetBatchGUID(ret.BatchGUID)
-		requestBytes, upsertCount, err := batchBuilder.BuildBatch()
+		requestBytes, upsertCount, err := batchBuilder.BuildBatchRequest()
 		if err != nil {
 			return ret, fmt.Errorf("Error building batch: %s", err)
 		}

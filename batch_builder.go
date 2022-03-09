@@ -55,6 +55,10 @@ func (b *BatchBuilder) isSenderInfoSet() bool {
 // AddUpsert attempts to add the input upsert into the batch.
 // Make sure to add all upserts to the batch before calling BuildBatch()
 func (b *BatchBuilder) AddUpsert(upsert *TagUpsert) error {
+	if b.builtBatchesCount > 0 {
+		return fmt.Errorf("Cannot add upsert after a batch has been built")
+	}
+
 	ser, err := json.Marshal(upsert)
 	if err != nil {
 		return fmt.Errorf("Error serializing TagUpsert: %s", err)
@@ -68,10 +72,10 @@ func (b *BatchBuilder) SetBatchGUID(guid string) {
 	b.batchGUID = guid
 }
 
-// BuildBatch builds and returns a serialized batch.
+// BuildBatchRequest builds and returns a serialized batch part request.
 // Once this method is called, don't make any further calls to AddUpsert.
 // - returns serialized batch and upsert count
-func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
+func (b *BatchBuilder) BuildBatchRequest() ([]byte, int, error) {
 	if len(b.serializedUpserts) == 0 && (b.hasClosedBatch || !b.replaceAll) {
 		// nothing to do
 		return nil, 0, nil
@@ -83,10 +87,12 @@ func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 
 	b.buf.Reset()
 
-	// sort upserts by serialized size
-	sort.SliceStable(b.serializedUpserts, func(i int, j int) bool {
-		return len(b.serializedUpserts[i]) < len(b.serializedUpserts[j])
-	})
+	if b.builtBatchesCount == 0 {
+		// sort upserts by serialized size - only needs to happen once
+		sort.SliceStable(b.serializedUpserts, func(i int, j int) bool {
+			return len(b.serializedUpserts[i]) < len(b.serializedUpserts[j])
+		})
+	}
 
 	// guid
 	if _, err := b.buf.WriteString(`{"guid":"`); err != nil {
