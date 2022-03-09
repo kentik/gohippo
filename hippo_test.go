@@ -1,6 +1,8 @@
 package hippo
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +14,23 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+// helper function to assert that the headers are correct, gzip uncompresses the request,
+// and returns the JSON
+func getJSON(a *require.Assertions, r *http.Request) []byte {
+	// verify Content-Encoding
+	a.Equal(1, len(r.Header["Content-Encoding"]))
+	a.Equal("gzip", r.Header["Content-Encoding"][0])
+
+	// verify Content-Type
+	a.Equal(1, len(r.Header["Content-Type"]))
+	a.Equal("application/json", r.Header["Content-Type"][0])
+
+	gzippedPayload, err := ioutil.ReadAll(r.Body)
+	a.NoError(err)
+
+	return gzipUncompress(a, gzippedPayload)
+}
 
 // Test sending a small batch through a fake server
 func TestSinglePartBatch_Success(t *testing.T) {
@@ -34,7 +53,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 		serviceCalled = true
 
-		jsonPayload, err := ioutil.ReadAll(r.Body)
+		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
 		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
@@ -108,7 +127,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 
 		serviceCalled = true
 
-		jsonPayload, err := ioutil.ReadAll(r.Body)
+		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
 		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
@@ -184,8 +203,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 		t.Helper()
 
 		serviceCalled = true
-
-		jsonPayload, err := ioutil.ReadAll(r.Body)
+		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
 		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
@@ -280,10 +298,10 @@ func TestMultiPartBatch_Success(t *testing.T) {
 		t.Helper()
 		serviceCalled = true
 
+		jsonPayload := getJSON(a, r)
+
 		// keep track of the requests received
-		jsonPayload, err := ioutil.ReadAll(r.Body)
 		receivedRequests = append(receivedRequests, string(jsonPayload))
-		a.NoError(err)
 
 		// write the canned response - same for both batches
 		responseBytes, err := json.Marshal(cannedResponse)
@@ -428,10 +446,10 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 		t.Helper()
 		serviceCalled = true
 
+		jsonPayload := getJSON(a, r)
+
 		// keep track of the requests received
-		jsonPayload, err := ioutil.ReadAll(r.Body)
 		receivedRequests = append(receivedRequests, string(jsonPayload))
-		a.NoError(err)
 		requestCount++
 
 		// first request is success, second is failure
@@ -668,4 +686,17 @@ func buildIPAddresses(count int) []string {
 		}
 	}
 	return ret
+}
+
+func gzipUncompress(a *require.Assertions, data []byte) []byte {
+	b := bytes.NewBuffer(data)
+
+	r, err := gzip.NewReader(b)
+	a.NoError(err)
+
+	var resB bytes.Buffer
+	_, err = resB.ReadFrom(r)
+	a.NoError(err)
+
+	return resB.Bytes()
 }

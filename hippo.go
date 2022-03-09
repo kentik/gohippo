@@ -2,6 +2,7 @@ package hippo
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -113,6 +114,7 @@ func (c *Client) NewTagBatchPartRequest(method string, url string, data []byte) 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UsrAgent)
 	req.Header.Set("X-CH-Auth-Email", c.UsrEmail)
@@ -180,7 +182,13 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 			break
 		}
 
-		req, err := c.NewTagBatchPartRequest("POST", url, requestBytes)
+		// gzip compress the batch
+		gzippedBytes, err := gzipCompress(requestBytes)
+		if err != nil {
+			return ret, fmt.Errorf("Error gzipping JSON request: %s", err)
+		}
+
+		req, err := c.NewTagBatchPartRequest("POST", url, gzippedBytes)
 		if err != nil {
 			return ret, fmt.Errorf("Error building request to %s - [%s] - underlying error: %s", url, ret, err)
 		}
@@ -214,6 +222,24 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 	}
 
 	return ret, nil
+}
+
+func gzipCompress(requestBody []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(requestBody); err != nil {
+		return nil, fmt.Errorf("Error gzipping request body: %s", err)
+	}
+
+	if err := zw.Flush(); err != nil {
+		return nil, fmt.Errorf("Error flushing gzip writer: %s", err)
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("Error closing gzip writer: %s", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // Compact a request down to combine criteria with the same values, returning a new request.
