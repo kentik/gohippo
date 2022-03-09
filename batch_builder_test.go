@@ -33,7 +33,7 @@ func TestBatchBuilder_FailureOverLimit(t *testing.T) {
 			Value: fmt.Sprintf("big_%d_%s", i, stringOfLength(i+1)),
 			Criteria: []TagCriteria{
 				{
-					Direction:   "asc",
+					Direction:   "src",
 					IPAddresses: ips,
 				},
 			},
@@ -46,7 +46,7 @@ func TestBatchBuilder_FailureOverLimit(t *testing.T) {
 			Value: fmt.Sprintf("small_%d_%s", i, stringOfLength(i+1)),
 			Criteria: []TagCriteria{
 				{
-					Direction:   "asc",
+					Direction:   "src",
 					IPAddresses: []string{"5.1.5.1"},
 				},
 			},
@@ -198,7 +198,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 			Value: nameFor(i),
 			Criteria: []TagCriteria{
 				{
-					Direction:   "asc",
+					Direction:   "src",
 					IPAddresses: []string{fmt.Sprintf("1.2.3.%d", i)},
 				},
 			},
@@ -221,7 +221,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 				Value: "value_A_A_A_A_A_5",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.5"},
 					},
 				},
@@ -230,7 +230,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 				Value: "value_A_A_A_A_4",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -239,7 +239,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 				Value: "value_A_A_A_3",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.3"},
 					},
 				},
@@ -248,7 +248,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 				Value: "value_A_A_2",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.2"},
 					},
 				},
@@ -257,7 +257,7 @@ func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 				Value: "value_A_1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.1"},
 					},
 				},
@@ -303,7 +303,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 			Value: nameFor(i),
 			Criteria: []TagCriteria{
 				{
-					Direction:   "asc",
+					Direction:   "src",
 					IPAddresses: []string{fmt.Sprintf("1.2.3.%d", i)},
 				},
 			},
@@ -326,7 +326,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 				Value: "value_A_A_A_A_A_5",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.5"},
 					},
 				},
@@ -335,7 +335,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 				Value: "value_A_A_A_A_4",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -344,7 +344,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 				Value: "value_A_A_A_3",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.3"},
 					},
 				},
@@ -375,7 +375,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 				Value: "value_A_A_2",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.2"},
 					},
 				},
@@ -384,7 +384,7 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 				Value: "value_A_1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.1"},
 					},
 				},
@@ -420,7 +420,7 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 				Value: fmt.Sprintf("big_%d", i),
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: ips,
 					},
 				},
@@ -441,7 +441,7 @@ func TestBatchBuilder_SuccessWithBigAndSmallUpserts(t *testing.T) {
 				Value: fmt.Sprintf("small_%d", i),
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: ips,
 					},
 				},

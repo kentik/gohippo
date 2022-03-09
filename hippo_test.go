@@ -56,7 +56,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"src","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -80,7 +80,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 				Value: "test1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -130,7 +130,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"src","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -154,7 +154,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 				Value: "test1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -206,7 +206,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 		jsonPayload := getJSON(a, r)
 
 		// verify the expected request
-		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`
+		expectedRequest := `{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"src","addr":["1.2.3.4"]}]}],"complete":true}`
 		a.Equal(expectedRequest, string(jsonPayload))
 
 		// write the canned response
@@ -230,7 +230,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 				Value: "test1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -275,13 +275,13 @@ func TestMultiPartBatch_Success(t *testing.T) {
 	// expecting 3 requests
 	expectedRequests := []string{
 		// first request has no GUID, and has complete=false
-		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"complete":false}`,
+		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"src","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"src","addr":["4.2.3.4"]}]}],"complete":false}`,
 
 		// second request has the GUID, and has complete=false
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"complete":false}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"src","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"src","addr":["2.2.3.4"]}]}],"complete":false}`,
 
 		// third request has the GUID, and complete=true
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"asc","addr":["1.2.3.4"]}]}],"complete":true}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test1","criteria":[{"direction":"src","addr":["1.2.3.4"]}]}],"complete":true}`,
 	}
 
 	lock := sync.Mutex{}
@@ -327,7 +327,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 				Value: "test1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -336,7 +336,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 				Value: "test2",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"2.2.3.4"},
 					},
 				},
@@ -345,7 +345,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 				Value: "test3",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"3.2.3.4"},
 					},
 				},
@@ -354,7 +354,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 				Value: "test4",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"4.2.3.4"},
 					},
 				},
@@ -363,7 +363,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 				Value: "test5",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"5.2.3.4"},
 					},
 				},
@@ -425,10 +425,10 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	// expecting 2 requests
 	expectedRequests := []string{
 		// first request has no GUID, and has complete=false
-		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"asc","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"asc","addr":["4.2.3.4"]}]}],"complete":false}`,
+		`{"guid":"","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test5","criteria":[{"direction":"src","addr":["5.2.3.4"]}]},{"value":"test4","criteria":[{"direction":"src","addr":["4.2.3.4"]}]}],"complete":false}`,
 
 		// second request has the GUID, and also has complete=false, since there should be 3 parts, but we only send 2
-		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"asc","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"asc","addr":["2.2.3.4"]}]}],"complete":false}`,
+		`{"guid":"c8285742-f7a4-4870-933d-665b15c31eda","replace_all":true,"ttl_minutes":0,"sender":{"service_name":"my-service","service_instance":"service-instance-1","host_name":"my-host-name"},"upserts":[{"value":"test3","criteria":[{"direction":"src","addr":["3.2.3.4"]}]},{"value":"test2","criteria":[{"direction":"src","addr":["2.2.3.4"]}]}],"complete":false}`,
 	}
 
 	lock := sync.Mutex{}
@@ -483,7 +483,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 				Value: "test1",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"1.2.3.4"},
 					},
 				},
@@ -492,7 +492,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 				Value: "test2",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"2.2.3.4"},
 					},
 				},
@@ -501,7 +501,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 				Value: "test3",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"3.2.3.4"},
 					},
 				},
@@ -510,7 +510,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 				Value: "test4",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"4.2.3.4"},
 					},
 				},
@@ -519,7 +519,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 				Value: "test5",
 				Criteria: []TagCriteria{
 					{
-						Direction:   "asc",
+						Direction:   "src",
 						IPAddresses: []string{"5.2.3.4"},
 					},
 				},
