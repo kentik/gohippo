@@ -531,7 +531,7 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 	url := fmt.Sprintf("%s/kentik/server/url", ts.URL)
 	response, err := sut.SendBatch(context.Background(), url, &batch)
 	a.Error(err)
-	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1 parts sent, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
+	expectedErrorStr := fmt.Sprintf(`Error POSTing populators to %s/kentik/server/url (232 bytes) - [Batch GUID: c8285742-f7a4-4870-933d-665b15c31eda; Progress: 1 parts sent, 2/5 upserts, 0/0 deletes] - underlying error: http error 500: server error occurred`, ts.URL)
 	a.Equal(expectedErrorStr, err.Error())
 	a.NotNil(response)
 

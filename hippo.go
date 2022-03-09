@@ -194,7 +194,7 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 		}
 		responseBytes, err := c.Do(ctx, req)
 		if err != nil {
-			return ret, fmt.Errorf("Error POSTing populators to %s - [%s] - underlying error: %s", url, ret, err)
+			return ret, fmt.Errorf("Error POSTing populators to %s (%d bytes) - [%s] - underlying error: %s", url, len(gzippedBytes), ret, err)
 		}
 
 		if ret.PartsSent == 0 {
