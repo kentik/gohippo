@@ -37,6 +37,72 @@ func TestBatchBuilder_FailureImpossible(t *testing.T) {
 	a.Zero(upsertCount)
 }
 
+// test building an empty replace-all bach does build an empty batch - once
+func TestBatchBuilder_SuccessEmptyReplaceAllBatch(t *testing.T) {
+	a := require.New(t)
+
+	sut := NewBatchBuilder(3000000, true, 17)
+	sut.SetSenderInfo(TagBatchPartSender{
+		ServiceName:     "service-name",
+		ServiceInstance: "service-instance",
+		HostName:        "host-name",
+	})
+
+	// build the batch - make sure EVERYTHING is as we expect
+	batchBytes, upsertCount, err := sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(0, upsertCount)
+	a.NotNil(batchBytes)
+	a.Equal(179, len(batchBytes))
+
+	expectedBatch := TagBatchPart{
+		BatchGUID:  "",
+		ReplaceAll: true,
+		IsComplete: true,
+		Upserts:    []TagUpsert{},
+		TTLMinutes: 17,
+		Sender: TagBatchPartSender{
+			ServiceName:     "service-name",
+			ServiceInstance: "service-instance",
+			HostName:        "host-name",
+		},
+	}
+
+	receivedBatch := TagBatchPart{}
+	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
+	a.True(expectedBatch.Equal(receivedBatch))
+
+	// try sending it again - should result in no batch, since the replace_all=true batch was just built
+	batchBytes, upsertCount, err = sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(0, upsertCount)
+	a.Nil(batchBytes)
+}
+
+// test building an empty non-replace-all bach doesn't build a batch
+func TestBatchBuilder_SuccessEmptyNonReplaceAllBatch(t *testing.T) {
+	a := require.New(t)
+
+	sut := NewBatchBuilder(3000000, false, 17)
+	sut.SetSenderInfo(TagBatchPartSender{
+		ServiceName:     "service-name",
+		ServiceInstance: "service-instance",
+		HostName:        "host-name",
+	})
+
+	// attempt to build the batch - should do nothing, since there's no upserts, and this isn't a replace-all batch
+	batchBytes, upsertCount, err := sut.BuildBatch()
+	a.NoError(err)
+	a.Nil(batchBytes)
+	a.Equal(0, upsertCount)
+
+	// try sending it again - should result in no batch again
+	batchBytes, upsertCount, err = sut.BuildBatch()
+	a.NoError(err)
+	a.Equal(0, upsertCount)
+	a.Nil(batchBytes)
+}
+
 // Test building a batch that fits in one part
 func TestBatchBuilder_SuccessOneBatch(t *testing.T) {
 	a := require.New(t)

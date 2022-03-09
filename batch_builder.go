@@ -72,7 +72,7 @@ func (b *BatchBuilder) SetBatchGUID(guid string) {
 // Once this method is called, don't make any further calls to AddUpsert.
 // - returns serialized batch and upsert count
 func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
-	if len(b.serializedUpserts) == 0 && b.hasClosedBatch {
+	if len(b.serializedUpserts) == 0 && (b.hasClosedBatch || !b.replaceAll) {
 		// nothing to do
 		return nil, 0, nil
 	}
@@ -191,12 +191,13 @@ func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 			continue
 		}
 
+		if upsertCount == 0 {
+			// couldn't fit anything in this batch
+			return nil, 0, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
+		}
 		break
 	}
 
-	if upsertCount == 0 {
-		return nil, 0, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
-	}
 	if _, err := b.buf.WriteString(`]`); err != nil {
 		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
 	}
