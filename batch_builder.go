@@ -75,6 +75,9 @@ func (b *BatchBuilder) SetBatchGUID(guid string) {
 // BuildBatchRequest builds and returns a serialized batch part request.
 // Once this method is called, don't make any further calls to AddUpsert.
 // - returns serialized batch and upsert count
+// - if there are upserts, it will make sure to include at least one in the batch,
+//   even if the batch goes over the limit. This is to give the batch a shot, in case
+//   the configured limit is still lower than what the server will allow.
 func (b *BatchBuilder) BuildBatchRequest() ([]byte, int, error) {
 	if len(b.serializedUpserts) == 0 && (b.hasClosedBatch || !b.replaceAll) {
 		// nothing to do
@@ -168,7 +171,8 @@ func (b *BatchBuilder) BuildBatchRequest() ([]byte, int, error) {
 		}
 
 		// couldn't fit the bigger one - try smaller
-		if len(b.serializedUpserts[start]) <= availableSpace {
+		// - if the batch is empty, and this smaller one is too big to fit, we try anyway
+		if upsertCount == 0 || len(b.serializedUpserts[start]) <= availableSpace {
 			if upsertCount > 0 {
 				if _, err := b.buf.WriteString(","); err != nil {
 					return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
@@ -187,11 +191,6 @@ func (b *BatchBuilder) BuildBatchRequest() ([]byte, int, error) {
 			continue
 		}
 
-		// smaller wouldn't fit either
-		if upsertCount == 0 {
-			// batch is empty
-			return nil, 0, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
-		}
 		break
 	}
 

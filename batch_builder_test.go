@@ -10,17 +10,27 @@ import (
 )
 
 // test batch building when every populator is too big for a single batch
-func TestBatchBuilder_FailureImpossible(t *testing.T) {
+// - in this case, we send batches anyway, from the smallest to the biggest,
+//   just in case server can accept them, we wanna send out whatever we can
+func TestBatchBuilder_FailureOverLimit(t *testing.T) {
 	a := require.New(t)
 
 	maxSize := 10000
 	sut := NewBatchBuilder(maxSize, true, 0)
 
-	// 10 populators, 1000 IP addresses each - each populator is 11,630 bytes
+	stringOfLength := func(length int) string {
+		ret := ""
+		for i := 0; i < length; i++ {
+			ret += "a"
+		}
+		return ret
+	}
+
+	// 3 populators, 1000 IP addresses each - each populator is 11,629-11,631 bytes
 	ips := buildIPAddresses(1000)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		a.NoError(sut.AddUpsert(&TagUpsert{
-			Value: fmt.Sprintf("abcdef_%d", i),
+			Value: fmt.Sprintf("big_%d_%s", i, stringOfLength(i+1)),
 			Criteria: []TagCriteria{
 				{
 					Direction:   "asc",
@@ -30,11 +40,71 @@ func TestBatchBuilder_FailureImpossible(t *testing.T) {
 		}))
 	}
 
+	// 3 tiny populators that have no problem fitting into the first batch
+	for i := 0; i < 3; i++ {
+		a.NoError(sut.AddUpsert(&TagUpsert{
+			Value: fmt.Sprintf("small_%d_%s", i, stringOfLength(i+1)),
+			Criteria: []TagCriteria{
+				{
+					Direction:   "asc",
+					IPAddresses: []string{"5.1.5.1"},
+				},
+			},
+		}))
+	}
+
+	verify := func(batchGUID string, hasUpsert bool, upsertValue string) {
+		batchBytes, receivedUpsertCount, err := sut.BuildBatchRequest()
+		a.NoError(err)
+		if !hasUpsert {
+			a.Nil(batchBytes)
+			a.Equal(0, receivedUpsertCount)
+			return
+		}
+
+		a.NotNil(batchBytes)
+		a.True(len(batchBytes) > maxSize) // we had no choice but to build a bigger-than-desired batch
+		a.Equal(1, receivedUpsertCount)
+		batch := TagBatchPart{}
+		a.NoError(json.Unmarshal(batchBytes, &batch))
+		a.Equal(batchGUID, batch.BatchGUID)
+		a.Equal(1, len(batch.Upserts))
+		a.Equal(1, len(batch.Upserts[0].Criteria))
+		a.Equal(1000, len(batch.Upserts[0].Criteria[0].IPAddresses))
+		a.Equal(upsertValue, batch.Upserts[0].Value)
+	}
+
+	// 1/4 parts - contains all the small populators
 	batchBytes, upsertCount, err := sut.BuildBatchRequest()
+	a.NotNil(batchBytes)
+	a.NoError(err)
+	a.Equal(3, upsertCount)
+	batch := TagBatchPart{}
+	a.NoError(json.Unmarshal(batchBytes, &batch))
+	a.Equal(3, len(batch.Upserts)) // 3 small ones
+
+	// these should be ordered from smallest to biggest, because of the 3 bigger batches
+	a.Equal("small_0_a", batch.Upserts[0].Value)
+	a.Equal("small_1_aa", batch.Upserts[1].Value)
+	a.Equal("small_2_aaa", batch.Upserts[2].Value)
+
+	// make sure that we get an error when building the second part without a GUID
+	batchBytes, upsertCount, err = sut.BuildBatchRequest()
 	a.Nil(batchBytes)
-	a.Error(err)
-	a.Equal("Have 10 remaining upserts, but could not fit any into the batch. The smallest one is 11630 bytes", err.Error())
 	a.Zero(upsertCount)
+	a.Error(err)
+	a.Equal("Only first batch may be sent without batch GUID", err.Error())
+
+	// set the GUID and continue
+	guid := "805e4dcb-3ecd-24f3-3a35-3e926e4bded5"
+	sut.SetBatchGUID(guid)
+
+	// rest of the batches hold a single, oversized populator each, hoping for the best on the server side
+	// should be ordered smallest to biggest, to get as much into the server as possible
+	verify(guid, true, "big_0_a")
+	verify(guid, true, "big_1_aa")
+	verify(guid, true, "big_2_aaa")
+	verify("", false, "")
 }
 
 // test building an empty replace-all bach does build an empty batch - once
