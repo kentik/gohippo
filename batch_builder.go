@@ -63,11 +63,6 @@ func (b *BatchBuilder) AddUpsert(upsert *TagUpsert) error {
 	if err != nil {
 		return fmt.Errorf("Error serializing TagUpsert: %s", err)
 	}
-
-	if len(ser) > b.desiredSize-300 {
-		return fmt.Errorf("Cannot add upsert with value: %s, serialized length: %d - too big for batch with max size of %d", upsert.Value, len(ser), b.desiredSize)
-	}
-
 	b.serializedUpserts = append(b.serializedUpserts, ser)
 	return nil
 }

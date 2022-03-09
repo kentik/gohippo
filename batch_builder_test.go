@@ -9,35 +9,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// test batch building when one populator is too big to fit
+// test batch building when every populator is too big for a single batch
 func TestBatchBuilder_FailureImpossible(t *testing.T) {
 	a := require.New(t)
 
 	maxSize := 10000
 	sut := NewBatchBuilder(maxSize, true, 0)
 
-	// 2 populators, one that's 11,632 bytes
-	a.NoError(sut.AddUpsert(&TagUpsert{
-		Value: "fits",
-		Criteria: []TagCriteria{
-			{
-				Direction:   "asc",
-				IPAddresses: buildIPAddresses(1),
+	// 10 populators, 1000 IP addresses each - each populator is 11,630 bytes
+	ips := buildIPAddresses(1000)
+	for i := 0; i < 10; i++ {
+		a.NoError(sut.AddUpsert(&TagUpsert{
+			Value: fmt.Sprintf("abcdef_%d", i),
+			Criteria: []TagCriteria{
+				{
+					Direction:   "asc",
+					IPAddresses: ips,
+				},
 			},
-		},
-	}))
+		}))
+	}
 
-	err := sut.AddUpsert(&TagUpsert{
-		Value: "doesnt_fit",
-		Criteria: []TagCriteria{
-			{
-				Direction:   "asc",
-				IPAddresses: buildIPAddresses(1000),
-			},
-		},
-	})
+	batchBytes, upsertCount, err := sut.BuildBatchRequest()
+	a.Nil(batchBytes)
 	a.Error(err)
-	a.Equal("Cannot add upsert with value: doesnt_fit, serialized length: 11632 - too big for batch with max size of 10000", err.Error())
+	a.Equal("Have 10 remaining upserts, but could not fit any into the batch. The smallest one is 11630 bytes", err.Error())
+	a.Zero(upsertCount)
 }
 
 // test building an empty replace-all bach does build an empty batch - once
@@ -293,11 +290,6 @@ func TestBatchBuilder_SuccessTwoBatches(t *testing.T) {
 	receivedBatch := TagBatchPart{}
 	a.NoError(json.Unmarshal(batchBytes, &receivedBatch))
 	a.True(expectedBatch.Equal(receivedBatch))
-
-	// verify we can't add more upserts
-	err = sut.AddUpsert(&TagUpsert{Value: "abcdefg12345", Criteria: []TagCriteria{{Direction: "asc", IPAddresses: []string{"1.2.3.4"}}}})
-	a.Error(err)
-	a.Equal("Cannot add upsert after a batch has been built", err.Error())
 
 	// batch 2: 2 upserts
 	sut.SetBatchGUID("805e4dcb-3ecd-24f3-3a35-3e926e4bded5")
