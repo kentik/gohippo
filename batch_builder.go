@@ -140,11 +140,7 @@ func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 	availableSpace := b.desiredSize - b.buf.Len() - 40
 
 	upsertCount := 0
-	for {
-		if start > end || availableSpace <= 0 {
-			break
-		}
-
+	for start <= end && availableSpace > 0 {
 		// try the bigger upserts first
 		if len(b.serializedUpserts[end]) <= availableSpace {
 			if upsertCount > 0 {
@@ -185,8 +181,9 @@ func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 			continue
 		}
 
+		// smaller wouldn't fit either
 		if upsertCount == 0 {
-			// couldn't fit anything in this batch
+			// batch is empty
 			return nil, 0, fmt.Errorf("Have %d remaining upserts, but could not fit any into the batch. The smallest one is %d bytes", len(b.serializedUpserts), len(b.serializedUpserts[start]))
 		}
 		break
