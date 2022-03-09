@@ -88,12 +88,6 @@ func (b *BatchBuilder) BuildBatch() ([]byte, int, error) {
 		return len(b.serializedUpserts[i]) < len(b.serializedUpserts[j])
 	})
 
-	// estimate how much data we have
-	dataSize := 0
-	for _, serializedUpsert := range b.serializedUpserts {
-		dataSize += len(serializedUpsert)
-	}
-
 	// guid
 	if _, err := b.buf.WriteString(`{"guid":"`); err != nil {
 		return nil, 0, fmt.Errorf("Error writing string to buffer: %s", err)
