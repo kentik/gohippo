@@ -1,0 +1,25 @@
+version: v1
+plugins:
+  - name: gogoslick
+    out: .
+    opt:
+      - paths=source_relative
+      - Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types
+      - Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types
+      - Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types
+      - Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types
+      - Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:.
+#  - name: go-grpc
+#    out: .
+#    opt: paths=source_relative
+#  - name: grpc-gateway
+#    out: .
+#    opt:
+#      - logtostderr=true
+#      - paths=source_relative
+#      - generate_unbound_methods=true
+#  - name: openapiv2
+#    out: .
+#    opt:
+#      - logtostderr=true
+#      - generate_unbound_methods=true

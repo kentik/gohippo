@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package hippo;
 
-import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+option go_package = "github.com/gogo/grpc-example/proto;hippo";
+
+import "gogoproto/gogo.proto";
 
 // TagBatchPartSender holds metadata about the sender
 message TagBatchPartSender {
