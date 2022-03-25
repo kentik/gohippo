@@ -1,6 +1,8 @@
 VERSION 0.6
 
-FROM golang:1.17
+ARG GO_VERSION=1.17
+
+FROM golang:${GO_VERSION}
 
 WORKDIR /build
 
@@ -8,6 +10,8 @@ all:
     BUILD +build
     BUILD +test
     BUILD +gen-proto
+    # Enable on next PR
+    #BUILD +breaking-proto
 
 GO_RUN:
     COMMAND
@@ -39,11 +43,12 @@ proto-deps:
     END
     RUN apt-get update && apt-get install -y wget unzip
 
-    RUN wget -O protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.13.0/protoc-3.13.0-${TARGETOS}-${PROTOARCH}.zip
+    ARG PROTO_VERSION=3.13.0
+    RUN wget -O protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTO_VERSION}/protoc-${PROTO_VERSION}-${TARGETOS}-${PROTOARCH}.zip
     RUN unzip protoc.zip -d /usr/local/
 
-    RUN VERSION="1.1.0" && \
-            curl -sSL "https://github.com/bufbuild/buf/releases/download/v${VERSION}/buf-$(uname -s)-$(uname -m)" -o "/usr/local/bin/buf"
+    ARG BUF_VERSION=1.1.0
+    RUN curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o "/usr/local/bin/buf"
         RUN chmod +x "/usr/local/bin/buf"
 
     RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -59,3 +64,7 @@ gen-proto:
 lint-proto:
     FROM +proto-deps
     RUN buf lint
+
+breaking-proto:
+    FROM +proto-deps
+    RUN buf breaking --against "https://github.com/kentik/gohippo.git#branch=main"

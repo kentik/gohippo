@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package hippo;
 
-option go_package = "github.com/gogo/grpc-example/proto;hippo";
+option go_package = "github.com/kentik/gohippo;hippo";
 
 import "gogoproto/gogo.proto";
 
