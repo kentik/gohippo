@@ -35,7 +35,7 @@ proto-deps:
     IF [ "${TARGETARCH}" = "arm64" ]
         ARG PROTOARCH=aarch_64
     ELSE
-        ARG PROTOARCH=${TARGETARCH}
+        ARG PROTOARCH=x86_64
     END
     RUN apt-get update && apt-get install -y wget unzip
 
