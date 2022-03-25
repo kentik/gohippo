@@ -41,18 +41,16 @@ proto-deps:
     ELSE
         ARG PROTOARCH=x86_64
     END
-    RUN apt-get update && apt-get install -y wget unzip
+    RUN apt-get update && apt-get install -y unzip
 
-    ARG PROTO_VERSION=3.13.0
-    RUN wget -O protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTO_VERSION}/protoc-${PROTO_VERSION}-${TARGETOS}-${PROTOARCH}.zip
+    ARG PROTO_VERSION=3.19.4
+    RUN curl -sSL -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTO_VERSION}/protoc-${PROTO_VERSION}-${TARGETOS}-${PROTOARCH}.zip
     RUN unzip protoc.zip -d /usr/local/
 
-    ARG BUF_VERSION=1.1.0
+    ARG BUF_VERSION=1.2.1
     RUN curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-$(uname -s)-$(uname -m)" -o "/usr/local/bin/buf"
         RUN chmod +x "/usr/local/bin/buf"
 
-    RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-    RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
     RUN go install github.com/gogo/protobuf/protoc-gen-gogoslick@latest
     COPY tagging.proto buf.* .
 
