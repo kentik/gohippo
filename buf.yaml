@@ -7,3 +7,7 @@ breaking:
 lint:
   use:
     - DEFAULT
+  except:
+    - FIELD_LOWER_SNAKE_CASE
+    - PACKAGE_VERSION_SUFFIX
+    - PACKAGE_DIRECTORY_MATCH

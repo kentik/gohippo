@@ -7,11 +7,18 @@ FROM golang:${GO_VERSION}
 WORKDIR /build
 
 all:
+    BUILD +gen-proto
     BUILD +build
     BUILD +test
-    BUILD +gen-proto
+
+check:
+    BUILD +build
+    BUILD +test
+    BUILD +check-proto-not-changed
+    BUILD +lint-proto
     # Enable on next PR
     #BUILD +breaking-proto
+
 
 GO_RUN:
     COMMAND
@@ -58,6 +65,12 @@ gen-proto:
     FROM +proto-deps
     RUN buf generate
     SAVE ARTIFACT tagging.pb.go AS LOCAL tagging.pb.go
+
+check-proto-not-changed:
+    FROM +proto-deps
+    RUN buf generate
+    COPY tagging.pb.go tagging.pb.go.orig
+    RUN diff -q tagging.pb.go tagging.pb.go.orig || (echo "profobuf files needs regeneration, please run earthly +gen-proto locally, commit all changes and try again" && exit 1)
 
 lint-proto:
     FROM +proto-deps
