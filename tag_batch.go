@@ -12,6 +12,7 @@ import (
 )
 
 // compiled regular expression - for tags - custom dimensions can have whatever they want
+// nolint:unused
 var _validTagValueRegexp *regexp.Regexp
 
 // init function for this file - evaluated in init.go
@@ -45,20 +46,10 @@ func TagHashFromCriteriaHashes(hashes []string) string {
 
 	s := md5.New()
 	for _, hash := range hashes {
+		// nolint
 		io.WriteString(s, hash)
 	}
 	return fmt.Sprintf("%x", s.Sum(nil))
-}
-
-// convert []int32 to []uint8, ignoring those that are out of bounds
-func uint32sToUint8s(in []uint32) []uint8 {
-	ret := make([]uint8, 0, len(in))
-	for _, v := range in {
-		if v >= 0 && v <= 255 {
-			ret = append(ret, uint8(v))
-		}
-	}
-	return ret
 }
 
 func ensureCIDRs(addresses []string) []string {

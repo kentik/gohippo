@@ -501,6 +501,7 @@ func SanitizeBGPCommunities(bgpCommunities []string, errMsg *string) []string {
 
 // SanitizeTCPFlags sanitizes TCP flags, setting it to 0 if invalid, and returning an error message
 func SanitizeTCPFlags(tcpFlags uint32, errMsg *string) uint32 {
+	// nolint:staticcheck
 	if tcpFlags < 0 || tcpFlags > 255 {
 		*errMsg = "invalid tcp flags: must be 0-255"
 		return 0

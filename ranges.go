@@ -197,7 +197,7 @@ func (s VLanRangesSlice) ToStringArray() []string {
 // ParseASNs returns the parsed ASN list, along with an error message to show to customer
 // - error values are skipped, so you can ignore the error if you like
 func ParseASNs(asns []string, errMsg *string) []ASNRange {
-	ret := make([]ASNRange, 0, 0)
+	ret := make([]ASNRange, 0)
 
 	for _, str := range asns {
 		parts := strings.Split(str, "-")
@@ -238,6 +238,7 @@ func ParseASNs(asns []string, errMsg *string) []ASNRange {
 // ParseVLans parses a string array of VLan ranges into []VLanRange,
 // skipping invalid entries, and returning an error string meant
 // for the user, but can be ignored internally
+// nolint:staticcheck
 func ParseVLans(vlans []string, errMsg *string) []VLanRange {
 	ret := make([]VLanRange, 0)
 
@@ -284,7 +285,7 @@ func ParseVLans(vlans []string, errMsg *string) []VLanRange {
 // as well as an error string meant for the user, and can be
 // ignored internally
 func ParsePorts(ports []string, errMsg *string) []PortRange {
-	ret := make([]PortRange, 0, 0)
+	ret := make([]PortRange, 0)
 
 	for _, str := range ports {
 		parts := strings.Split(str, "-")
@@ -321,6 +322,7 @@ func ParsePorts(ports []string, errMsg *string) []PortRange {
 }
 
 // ParseProtocols validates the input int32 array, making sure each is 0-255
+// nolint:staticcheck
 func ParseProtocols(protocols []uint32, errMsg *string) []uint32 {
 	ret := make([]uint32, 0, len(protocols))
 	for _, protocol := range protocols {
