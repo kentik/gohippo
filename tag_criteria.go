@@ -3,7 +3,7 @@ package hippo
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/cznic/sortutil"
+	"modernc.org/sortutil"
 	"io"
 	"sort"
 	"strconv"
