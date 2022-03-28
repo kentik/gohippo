@@ -320,6 +320,118 @@ func (c *TagCriteria) Validate(isPopulator bool) (bool, map[string]string) {
 			hasCriteria = true
 		}
 	}
+	if len(c.Str17) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str17); !success {
+			ret["str17"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str18) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str18); !success {
+			ret["str18"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str19) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str19); !success {
+			ret["str19"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str20) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str20); !success {
+			ret["str20"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str21) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str21); !success {
+			ret["str21"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str22) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str22); !success {
+			ret["str22"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str23) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str23); !success {
+			ret["str23"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str24) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str24); !success {
+			ret["str24"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str25) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str25); !success {
+			ret["str25"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str26) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str26); !success {
+			ret["str26"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str27) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str27); !success {
+			ret["str27"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str28) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str28); !success {
+			ret["str28"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str29) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str29); !success {
+			ret["str29"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str30) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str30); !success {
+			ret["str30"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str31) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str31); !success {
+			ret["str31"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
+	if len(c.Str32) > 0 {
+		if success, errMsg := validateFlexStringCriteria(c.Str32); !success {
+			ret["str32"] = errMsg
+		} else {
+			hasCriteria = true
+		}
+	}
 
 	if len(c.Int00) > 0 {
 		if _, errMsg := NewFlexUint32RangesFromStrings(c.Int00); errMsg != "" {
