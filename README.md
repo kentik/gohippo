@@ -9,7 +9,7 @@
 
 To build hippo you should use [Eathly](https://earthly.dev/)
 ```
-eartly +all
+earthly +all
 ```
 
-That will regenerate propobuf files and run build + test process.
+That will regenerate protobuf files and run build + test process.
