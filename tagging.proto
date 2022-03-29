@@ -98,6 +98,23 @@ message TagCriteria {
 	repeated string Inet02 = 51 [(gogoproto.jsontag) = "inet_02,omitempty"];
 	repeated string Inet03 = 52 [(gogoproto.jsontag) = "inet_03,omitempty"];
 	repeated string Inet04 = 53 [(gogoproto.jsontag) = "inet_04,omitempty"];
+
+	repeated FlexStringCriteria Str17 = 54 [(gogoproto.jsontag) = "str17,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str18 = 55 [(gogoproto.jsontag) = "str18,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str19 = 56 [(gogoproto.jsontag) = "str19,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str20 = 57 [(gogoproto.jsontag) = "str20,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str21 = 58 [(gogoproto.jsontag) = "str21,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str22 = 59 [(gogoproto.jsontag) = "str22,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str23 = 60 [(gogoproto.jsontag) = "str23,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str24 = 61 [(gogoproto.jsontag) = "str24,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str25 = 62 [(gogoproto.jsontag) = "str25,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str26 = 63 [(gogoproto.jsontag) = "str26,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str27 = 64 [(gogoproto.jsontag) = "str27,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str28 = 65 [(gogoproto.jsontag) = "str28,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str29 = 66 [(gogoproto.jsontag) = "str29,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str30 = 67 [(gogoproto.jsontag) = "str30,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str31 = 68 [(gogoproto.jsontag) = "str31,omitempty", (gogoproto.nullable) = false];
+	repeated FlexStringCriteria Str32 = 69 [(gogoproto.jsontag) = "str32,omitempty", (gogoproto.nullable) = false];
 }
 
 // TagUpsert represents a tag or set of populators that have been created or updated
