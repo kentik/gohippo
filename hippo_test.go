@@ -65,7 +65,8 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		_, _ = w.Write(responseBytes)
+		// nolint
+		w.Write(responseBytes)
 	})
 
 	sut := NewHippo("agent", "email", "token")
