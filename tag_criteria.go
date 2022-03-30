@@ -15,8 +15,7 @@ func (c *TagCriteria) GenerateHash() string {
 	c.Normalize()
 
 	s := md5.New()
-	// nolint
-	io.WriteString(s, c.String())
+	_, _ = io.WriteString(s, c.String())
 	return fmt.Sprintf("%x", s.Sum(nil))
 }
 
@@ -280,8 +279,7 @@ func (c *TagCriteria) UpdateFromUserJSON(fields map[string]interface{}) (bool, m
 		if b64Val, err := strconv.ParseUint(fmt.Sprintf("%v", tcpFlags), 10, 32); err != nil {
 			ret["tcp_flags"] = "Must be an integer between 0-255"
 		} else {
-			// nolint:staticcheck
-			if b64Val < 0 || b64Val > 255 {
+			if b64Val > 255 {
 				ret["tcp_flags"] = "Must be an integer between 0-255"
 			} else {
 				c.TCPFlags = uint32(b64Val)

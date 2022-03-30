@@ -46,8 +46,7 @@ func TagHashFromCriteriaHashes(hashes []string) string {
 
 	s := md5.New()
 	for _, hash := range hashes {
-		// nolint
-		io.WriteString(s, hash)
+		_, _ = io.WriteString(s, hash)
 	}
 	return fmt.Sprintf("%x", s.Sum(nil))
 }
