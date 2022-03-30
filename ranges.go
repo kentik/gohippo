@@ -197,7 +197,7 @@ func (s VLanRangesSlice) ToStringArray() []string {
 // ParseASNs returns the parsed ASN list, along with an error message to show to customer
 // - error values are skipped, so you can ignore the error if you like
 func ParseASNs(asns []string, errMsg *string) []ASNRange {
-	ret := make([]ASNRange, 0, 0)
+	ret := make([]ASNRange, 0)
 
 	for _, str := range asns {
 		parts := strings.Split(str, "-")
@@ -246,7 +246,7 @@ func ParseVLans(vlans []string, errMsg *string) []VLanRange {
 		if len(parts) == 1 {
 			// single VLAN
 			if val, ok := parseUint32(str); ok {
-				if val >= 0 && val <= 4095 {
+				if val <= 4095 {
 					ret = append(ret, VLanRange{Start: val, End: val})
 				}
 			} else {
@@ -256,14 +256,14 @@ func ParseVLans(vlans []string, errMsg *string) []VLanRange {
 			// range
 			start, startOk := parseUint32(parts[0])
 			end, endOk := parseUint32(parts[1])
-			if startOk && endOk && end >= start && start >= 0 && start <= 4095 && end >= 0 && end <= 4095 {
+			if startOk && endOk && end >= start && start <= 4095 && end <= 4095 {
 				// valid range
 				ret = append(ret, VLanRange{Start: start, End: end})
 			} else {
-				if !startOk || start < 0 || start > 4095 {
+				if !startOk || start > 4095 {
 					appendErrorMessage(errMsg, "invalid VLAN: %d", start)
 				}
-				if !endOk || end < 0 || end > 4095 {
+				if !endOk || end > 4095 {
 					appendErrorMessage(errMsg, "invalid VLAN: %d", end)
 				}
 				if start > end {
@@ -284,7 +284,7 @@ func ParseVLans(vlans []string, errMsg *string) []VLanRange {
 // as well as an error string meant for the user, and can be
 // ignored internally
 func ParsePorts(ports []string, errMsg *string) []PortRange {
-	ret := make([]PortRange, 0, 0)
+	ret := make([]PortRange, 0)
 
 	for _, str := range ports {
 		parts := strings.Split(str, "-")
@@ -324,7 +324,7 @@ func ParsePorts(ports []string, errMsg *string) []PortRange {
 func ParseProtocols(protocols []uint32, errMsg *string) []uint32 {
 	ret := make([]uint32, 0, len(protocols))
 	for _, protocol := range protocols {
-		if protocol < 0 || protocol > 255 {
+		if protocol > 255 {
 			// invalid - skip it
 			appendErrorMessage(errMsg, "invalid protocol: %d is not between 0-255", protocol)
 		} else {

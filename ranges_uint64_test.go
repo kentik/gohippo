@@ -20,7 +20,7 @@ func TestNewUint64RangeFromString(t *testing.T) {
 	assert.Equal(t, uint64(100), sut[0].Start)
 	assert.Equal(t, uint64(100), sut[0].End)
 
-	sut, errStr = NewFlexUint64RangesFromStrings([]string{"a", "1"})
+	_, errStr = NewFlexUint64RangesFromStrings([]string{"a", "1"})
 	assert.True(t, len(errStr) > 0)
 
 	sut, errStr = NewFlexUint64RangesFromStrings([]string{"100-200", "3"})
@@ -37,6 +37,6 @@ func TestNewUint64RangeFromString(t *testing.T) {
 	assert.Equal(t, uint64(100), sut[0].Start)
 	assert.Equal(t, uint64(200), sut[0].End)
 
-	sut, errStr = NewFlexUint64RangesFromStrings([]string{"200-100"})
+	_, errStr = NewFlexUint64RangesFromStrings([]string{"200-100"})
 	assert.True(t, len(errStr) > 0)
 }

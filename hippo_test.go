@@ -65,7 +65,7 @@ func TestSinglePartBatch_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write(responseBytes)
+		_, _ = w.Write(responseBytes)
 	})
 
 	sut := NewHippo("agent", "email", "token")
@@ -139,7 +139,7 @@ func TestSinglePartBatch_Error(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write(responseBytes)
+		_, _ = w.Write(responseBytes)
 	})
 
 	sut := NewHippo("agent", "email", "token")
@@ -215,7 +215,7 @@ func TestSinglePartBatch_MissingGUID(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write(responseBytes)
+		_, _ = w.Write(responseBytes)
 	})
 
 	sut := NewHippo("agent", "email", "token")
@@ -309,7 +309,7 @@ func TestMultiPartBatch_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		w.Write(responseBytes)
+		_, _ = w.Write(responseBytes)
 	})
 
 	sut := NewHippo("agent", "email", "token")
@@ -460,11 +460,11 @@ func TestMultiPartBatch_PartialSuccess(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write(responseBytes)
+			_, _ = w.Write(responseBytes)
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(500)
-			w.Write([]byte("server error occurred"))
+			_, _ = w.Write([]byte("server error occurred"))
 		}
 	})
 

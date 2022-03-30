@@ -254,9 +254,7 @@ func compactTagBatchPart(rFull TagBatchPart) *TagBatchPart {
 		if _, found := rulesByLowerValue[valLower]; !found {
 			rulesByLowerValue[valLower] = make([]TagCriteria, 0, len(upsert.Criteria))
 		}
-		for _, rule := range upsert.Criteria {
-			rulesByLowerValue[valLower] = append(rulesByLowerValue[valLower], rule)
-		}
+		rulesByLowerValue[valLower] = append(rulesByLowerValue[valLower], upsert.Criteria...)
 	}
 
 	// re-build the upserts collection
@@ -285,7 +283,7 @@ func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required 
 	found := map[string]bool{}
 	done := 0
 
-	for col, _ := range required {
+	for col := range required {
 		found[col] = false
 	}
 

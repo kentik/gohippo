@@ -3,8 +3,8 @@ package hippo
 import (
 	"crypto/md5"
 	"fmt"
-	"modernc.org/sortutil"
 	"io"
+	"modernc.org/sortutil"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +15,7 @@ func (c *TagCriteria) GenerateHash() string {
 	c.Normalize()
 
 	s := md5.New()
-	io.WriteString(s, c.String())
+	_, _ = io.WriteString(s, c.String())
 	return fmt.Sprintf("%x", s.Sum(nil))
 }
 
@@ -24,22 +24,6 @@ func ensureStringArray(strArray []string) []string {
 		return make([]string, 0)
 	}
 	return strArray
-}
-
-func ensureAndSortUint64(slice64 *[]uint64) {
-	if *slice64 == nil {
-		*slice64 = make([]uint64, 0)
-		return
-	}
-	sortutil.Uint64Slice(*slice64).Sort()
-}
-
-func ensureAndSortUint32(slice32 *[]uint32) {
-	if *slice32 == nil {
-		*slice32 = make([]uint32, 0)
-		return
-	}
-	sortutil.Uint32Slice(*slice32).Sort()
 }
 
 func ensureAndSortStringArray(strArray *[]string) {
@@ -295,7 +279,7 @@ func (c *TagCriteria) UpdateFromUserJSON(fields map[string]interface{}) (bool, m
 		if b64Val, err := strconv.ParseUint(fmt.Sprintf("%v", tcpFlags), 10, 32); err != nil {
 			ret["tcp_flags"] = "Must be an integer between 0-255"
 		} else {
-			if b64Val < 0 || b64Val > 255 {
+			if b64Val > 255 {
 				ret["tcp_flags"] = "Must be an integer between 0-255"
 			} else {
 				c.TCPFlags = uint32(b64Val)
