@@ -17,7 +17,7 @@ check:
     BUILD +check-proto-not-changed
     BUILD +lint-proto
     # Enable on next PR
-    #BUILD +breaking-proto
+    BUILD +breaking-proto
 
 
 GO_RUN:
