@@ -108,8 +108,8 @@ func (c *Client) SetProxy(url *url.URL) {
 	c.transport.Proxy = http.ProxyURL(url)
 }
 
-func (c *Client) NewTagBatchPartRequest(method string, url string, data []byte) (*http.Request, error) {
-	req, err := http.NewRequest(method, url, bytes.NewReader(data))
+func (c *Client) NewTagBatchPartRequest(method string, url string, gzippedData []byte) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, bytes.NewReader(gzippedData))
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +320,11 @@ func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required 
 				return done, err
 			} else {
 				url := fmt.Sprintf("%s/api/internal/customdimension", apiHost)
-				if req, err := c.NewTagBatchPartRequest("POST", url, b); err != nil {
+				gzippedBytes, err := gzipCompress(b)
+				if err != nil {
+					return done, fmt.Errorf("Error gzipping JSON request: %s", err)
+				}
+				if req, err := c.NewTagBatchPartRequest("POST", url, gzippedBytes); err != nil {
 					return done, err
 				} else {
 					if _, err := c.Do(ctx, req); err != nil {
