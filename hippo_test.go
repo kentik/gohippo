@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -668,6 +669,64 @@ func TestFlexStringCriteriaEncoding(t *testing.T) {
 	require.NoError(err)
 
 	require.Equal(string(expect), string(actual))
+}
+
+func TestClient_NewGzipAPIRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "gzip", r.Header.Get("Content-Encoding"))
+		w.WriteHeader(200)
+	}))
+	defer server.Close()
+
+	client := NewHippo("", "", "")
+	req, err := client.NewGzipAPIRequest("POST", server.URL, []byte{})
+	assert.NoError(t, err)
+	resp, err := client.http.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestClient_EnsureDimensions(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			callCount++
+		}()
+
+		assert.Equal(t, "gzip", r.Header.Get("Content-Encoding"))
+		// first call is a get to request cols
+		if callCount == 0 {
+			assert.Equal(t, "GET", r.Method)
+			w.WriteHeader(200)
+			ret, err := json.Marshal(CustomDimensionList{})
+			assert.NoError(t, err)
+			_, _ = w.Write(ret)
+		}
+
+		// second call is a post to check if
+		if callCount == 1 {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte("already in use"))
+			assert.Equal(t, "POST", r.Method)
+		}
+
+		if callCount == 2 {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte("already in use"))
+			assert.Equal(t, "POST", r.Method)
+		}
+	}))
+
+	data := map[string]string{
+		"key1": "val1",
+		"key2": "val2",
+	}
+
+	client := NewHippo("", "", "")
+	n, err := client.EnsureDimensions(context.Background(), server.URL, data)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, n)
+	assert.Equal(t, 3, callCount)
 }
 
 // build a list of IP addresses

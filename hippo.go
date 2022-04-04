@@ -108,8 +108,9 @@ func (c *Client) SetProxy(url *url.URL) {
 	c.transport.Proxy = http.ProxyURL(url)
 }
 
-func (c *Client) NewTagBatchPartRequest(method string, url string, data []byte) (*http.Request, error) {
-	req, err := http.NewRequest(method, url, bytes.NewReader(data))
+// NewGzipAPIRequest creates a new request with headers added including authentication
+func (c *Client) NewGzipAPIRequest(method string, url string, gzippedData []byte) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, bytes.NewReader(gzippedData))
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func (c *Client) SendBatch(ctx context.Context, url string, batch *TagBatchPart)
 			return ret, fmt.Errorf("Error gzipping JSON request: %s", err)
 		}
 
-		req, err := c.NewTagBatchPartRequest("POST", url, gzippedBytes)
+		req, err := c.NewGzipAPIRequest("POST", url, gzippedBytes)
 		if err != nil {
 			return ret, fmt.Errorf("Error building request to %s - [%s] - underlying error: %s", url, ret, err)
 		}
@@ -288,7 +289,7 @@ func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required 
 	}
 
 	url := fmt.Sprintf("%s/api/internal/customdimensions", apiHost)
-	if req, err := c.NewTagBatchPartRequest("GET", url, nil); err != nil {
+	if req, err := c.NewGzipAPIRequest("GET", url, nil); err != nil {
 		return done, err
 	} else {
 		if res, err := c.Do(ctx, req); err != nil {
@@ -320,7 +321,11 @@ func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required 
 				return done, err
 			} else {
 				url := fmt.Sprintf("%s/api/internal/customdimension", apiHost)
-				if req, err := c.NewTagBatchPartRequest("POST", url, b); err != nil {
+				gzippedBytes, err := gzipCompress(b)
+				if err != nil {
+					return done, fmt.Errorf("Error gzipping JSON request: %s", err)
+				}
+				if req, err := c.NewGzipAPIRequest("POST", url, gzippedBytes); err != nil {
 					return done, err
 				} else {
 					if _, err := c.Do(ctx, req); err != nil {
