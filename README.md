@@ -7,7 +7,7 @@
 
 ## Build process
 
-To build hippo you should use [Eathly](https://earthly.dev/)
+To build hippo you should use [Earthly](https://earthly.dev/)
 ```
 earthly +all
 ```
