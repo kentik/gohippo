@@ -115,6 +115,8 @@ message TagCriteria {
 	repeated FlexStringCriteria Str30 = 67 [(gogoproto.jsontag) = "str30,omitempty", (gogoproto.nullable) = false];
 	repeated FlexStringCriteria Str31 = 68 [(gogoproto.jsontag) = "str31,omitempty", (gogoproto.nullable) = false];
 	repeated FlexStringCriteria Str32 = 69 [(gogoproto.jsontag) = "str32,omitempty", (gogoproto.nullable) = false];
+
+	repeated string DeviceSubtypeRegexes = 70 [(gogoproto.jsontag) = "device_subtype,omitempty"];
 }
 
 // TagUpsert represents a tag or set of populators that have been created or updated
