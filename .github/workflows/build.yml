@@ -12,22 +12,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # Allow the job to fetch a GitHub ID token
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-
     strategy:
       fail-fast: false
       matrix:
         go: [ '1.16', '1.17', '1.18' ]
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Run Earthly
-        uses: kentik/github-workflows/earthly@v1
+      - uses: earthly/actions-setup@v1
         with:
-          earthly_target: +check --GO_VERSION=${{ matrix.go }}
+          version: v0.8.0
+      - uses: actions/checkout@v4
+      - name: Run Earthly
+        env:
+          EARTHLY_NO_DOCKER_LOGIN: true
+        run: earthly --ci +build --GO_VERSION=${{ matrix.go }}
       
   lint:
     runs-on: ubuntu-latest
@@ -48,7 +46,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: 1.18
       - name: Calc coverage
         run: go test -covermode=count -coverprofile=coverage.out
       - name: Convert coverage.out to coverage.lcov
