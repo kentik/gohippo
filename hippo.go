@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type SendBatchResult struct {
@@ -348,7 +349,11 @@ func (c *Client) EnsureDimensions(ctx context.Context, apiHost string, required 
 
 func TruncateStringForMaxTagLen(str string) string {
 	if len(str) > MAX_TAG_LEN {
-		return str[0:MAX_TAG_LEN]
+		for i, s := range str {
+			if i >= MAX_TAG_LEN || i+utf8.RuneLen(rune(s)) > MAX_TAG_LEN {
+				return str[0:i]
+			}
+		}
 	}
 	return str
 }
