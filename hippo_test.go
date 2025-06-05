@@ -773,52 +773,65 @@ func TestTruncateStringForMaxTagLen(t *testing.T) {
 		name    string
 		input   string
 		isValid bool
+		exp     string
 	}{
 		{
 			name:    "short ascii",
 			input:   "some string",
 			isValid: true,
+			exp:     "some string",
 		},
 		{
 			name:    "long ascii",
 			input:   strings.Repeat("hi", MAX_TAG_LEN),
 			isValid: true,
+			exp:     strings.Repeat("hi", MAX_TAG_LEN/2),
 		},
 		{
 			name:    "very short unicode",
 			input:   "世界",
 			isValid: true,
+			exp:     "世界",
 		},
 		{
 			name:    "short unicode",
 			input:   strings.Repeat("世", MAX_TAG_LEN),
 			isValid: true,
+			exp:     strings.Repeat("世", MAX_TAG_LEN/3),
 		},
 		{
 			// trimming the last byte of a unicode char with rune length of 3, turns each of the remaining 2 bytes into 3 each
 			name:    "one len too big",
 			input:   strings.Repeat("世", MAX_TAG_LEN/len("世")+1),
 			isValid: true,
+			exp:     strings.Repeat("世", MAX_TAG_LEN/3),
 		},
 		{
 			name:    "long unicode",
 			input:   strings.Repeat("世界", MAX_TAG_LEN),
 			isValid: true,
+			exp:     strings.Repeat("世界", MAX_TAG_LEN/6),
 		},
 		{
 			name:    "long mixed",
 			input:   strings.Repeat("k", MAX_TAG_LEN+1) + strings.Repeat("世界", MAX_TAG_LEN),
 			isValid: true,
+			exp:     strings.Repeat("k", MAX_TAG_LEN),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldWayLen := len(string([]rune(oldTruncateStringForMaxTagLen(tt.input))))
-			runeLen := len(string([]rune(TruncateStringForMaxTagLen(tt.input))))
+			var (
+				oldWayLen = len(string([]rune(oldTruncateStringForMaxTagLen(tt.input))))
+				truncated = string([]rune(TruncateStringForMaxTagLen(tt.input)))
+				runeLen   = len(truncated)
+			)
+
 			assert.Equal(t, tt.isValid, runeLen <= MAX_TAG_LEN)
 			if oldWayLen != runeLen {
 				t.Logf("%s: discrepancy between old [%d] and new [%d]", tt.name, oldWayLen, runeLen)
 			}
+			assert.Equal(t, tt.exp, truncated)
 		})
 	}
 }
